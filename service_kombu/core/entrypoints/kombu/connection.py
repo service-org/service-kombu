@@ -5,10 +5,8 @@
 from __future__ import annotations
 
 from kombu import Connection as BaseConnection
-from service_core.core.decorator import AsSingletonCls
 
 
-@AsSingletonCls
 class Connection(BaseConnection):
     """ AMQP通用连接类 """
 

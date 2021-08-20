@@ -20,6 +20,7 @@ from service_core.core.decorator import AsFriendlyFunc
 from service_core.core.service.entrypoint import Entrypoint
 from service_core.core.service.extension import ShareExtension
 from service_core.core.service.extension import StoreExtension
+from service_kombu.core.entrypoints.kombu.connection import Connection
 
 logger = getLogger(__name__)
 
@@ -92,7 +93,7 @@ class AMQPSubProducer(Entrypoint, ShareExtension, StoreExtension):
         while not self.stopped:
             try:
                 if connection_loss is True:
-                    extension.connection = extension.connection.connect()
+                    extension.connection = Connection(**extension.connect_options)
                     connection_loss = False
                 consumer = Consumer(extension.connection, **extension.consume_options)
                 consumer.consume()
@@ -107,7 +108,7 @@ class AMQPSubProducer(Entrypoint, ShareExtension, StoreExtension):
                 # 如果之前建立过连接,暂不关心当前连接状态强制关闭掉当前连接
                 extension.connection and AsFriendlyFunc(extension.connection.release)()
                 logger.error(f'connection error while consumer consume', exc_info=True)
-                eventlet.sleep(1)
+                eventlet.sleep(2)
             except:
                 # 应该避免其它未知异常中断当前消费者导致任务无法被及时消费
                 logger.error(f'unexpected error while consumer consume', exc_info=True)

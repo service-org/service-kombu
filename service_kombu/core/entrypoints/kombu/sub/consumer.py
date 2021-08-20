@@ -98,7 +98,7 @@ class AMQPSubConsumer(Entrypoint):
         """
         event = Event()
         tid = f'{self}.self_handle_request'
-        args, kwargs = (body, message)
+        args, kwargs = (body, message), {}
         context = from_headers_to_context(message.headers, DEFAULT_KOMBU_HEADERS_MAPPING)
         gt = self.container.spawn_worker_thread(self, args=args, kwargs=kwargs, context=context, tid=tid)
         gt.link(self._link_results, event)
