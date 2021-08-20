@@ -15,6 +15,8 @@ from eventlet.greenthread import GreenThread
 from service_core.core.context import WorkerContext
 from service_kombu.constants import KOMBU_CONFIG_KEY
 from service_core.core.service.entrypoint import Entrypoint
+from service_kombu.core.convert import from_headers_to_context
+from service_kombu.constants import DEFAULT_KOMBU_HEADERS_MAPPING
 from service_kombu.constants import DEFAULT_KOMBU_CONNECT_HEARTBEAT
 from service_kombu.core.entrypoints.kombu.connection import Connection
 
@@ -96,10 +98,14 @@ class AMQPSubConsumer(Entrypoint):
         """
         event = Event()
         tid = f'{self}.self_handle_request'
-        gt = self.container.spawn_worker_thread(self, tid=tid)
+        args, kwargs = (body, message)
+        context = from_headers_to_context(message.headers, DEFAULT_KOMBU_HEADERS_MAPPING)
+        gt = self.container.spawn_worker_thread(self, args=args, kwargs=kwargs, context=context, tid=tid)
         gt.link(self._link_results, event)
         # 注意: 协程异常会导致收不到event最终内存溢出!
         context, results, excinfo = event.wait()
+        # 注意: 不管成功或失败都尝试去自动确认这个消息!
+        message.ack()
         return (
             self.handle_result(context, results)
             if excinfo is None else
