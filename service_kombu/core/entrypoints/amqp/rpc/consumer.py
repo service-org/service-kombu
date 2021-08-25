@@ -53,7 +53,7 @@ class AMQPRpcConsumer(Entrypoint):
         self.connection = None
         self.connect_options = connect_options or {}
         self.consume_options = consume_options or {}
-        super(, self).__init__(**kwargs)
+        super(AMQPRpcConsumer, self).__init__(**kwargs)
 
     def setup(self) -> None:
         """ 生命周期 - 载入阶段
@@ -61,11 +61,13 @@ class AMQPRpcConsumer(Entrypoint):
         @return: None
         """
         connect_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.connect_options', {})
-        self.connect_options = connect_options | self.connect_options
+        # 防止YAML中声明值为None
+        self.connect_options = (connect_options or {}) | self.connect_options
         self.connect_options.setdefault('heartbeat ', DEFAULT_KOMBU_AMQP_HEARTBEAT)
         self.connection = Connection(**self.connect_options)
         consume_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.consume_options', {})
-        self.consume_options = consume_options | self.consume_options
+        # 防止YAML中声明值为None
+        self.consume_options = (consume_options or {}) | self.consume_options
         self.consume_options.setdefault('callbacks', [self.handle_request])
         self.producer.reg_extension(self)
 

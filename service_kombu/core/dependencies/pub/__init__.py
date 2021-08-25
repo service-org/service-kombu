@@ -46,9 +46,13 @@ class AMQPPubProducer(Dependency):
         @return: None
         """
         connect_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.connect_options', {})
-        self.connect_options = connect_options | self.connect_options
+        # 防止YAML中声明值为None
+        self.connect_options = (connect_options or {}) | self.connect_options
         self.connect_options.setdefault('heartbeat ', DEFAULT_KOMBU_AMQP_HEARTBEAT)
         self.connection = Connection(**self.connect_options)
+        publish_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.publish_options', {})
+        # 防止YAML中声明值为None
+        self.publish_options = (publish_options or {}) | self.publish_options
         # 默认开启重试机制,防止开启心跳后超时被服务端主动踢下线
         self.publish_options.setdefault('retry', True)
 
