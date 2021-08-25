@@ -15,12 +15,12 @@ from eventlet.greenthread import GreenThread
 from kombu.exceptions import ConnectionError
 from kombu.exceptions import OperationalError
 from kombu.exceptions import InconsistencyError
+from service_kombu.core.connect import Connection
 from service_core.core.spawning import SpawningProxy
 from service_core.core.decorator import AsFriendlyFunc
 from service_core.core.service.entrypoint import Entrypoint
 from service_core.core.service.extension import ShareExtension
 from service_core.core.service.extension import StoreExtension
-from service_kombu.core.entrypoints.kombu.connection import Connection
 
 logger = getLogger(__name__)
 
@@ -93,11 +93,14 @@ class AMQPSubProducer(Entrypoint, ShareExtension, StoreExtension):
         while not self.stopped:
             try:
                 if connection_loss is True:
+                    logger.debug(f'{self} connection loss, start reconnecting')
                     extension.connection = Connection(**extension.connect_options)
+                    logger.debug(f'{self} connection lose, reconnect success')
                     connection_loss = False
                 consumer = Consumer(extension.connection, **extension.consume_options)
                 consumer.consume()
                 self.consumers.append(consumer)
+                logger.debug(f'{self} start consuming with {extension.consume_options}')
                 while True: extension.connection.drain_events()
                 # 优雅处理如ctrl + c, sys.exit, kill thread时的异常
             except (KeyboardInterrupt, SystemExit, GreenletExit):

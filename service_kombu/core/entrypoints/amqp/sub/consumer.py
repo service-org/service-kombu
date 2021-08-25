@@ -12,13 +12,13 @@ from logging import getLogger
 from eventlet.event import Event
 from kombu.message import Message
 from eventlet.greenthread import GreenThread
+from service_kombu.core.connect import Connection
 from service_core.core.context import WorkerContext
 from service_kombu.constants import KOMBU_CONFIG_KEY
 from service_core.core.service.entrypoint import Entrypoint
 from service_kombu.core.convert import from_headers_to_context
-from service_kombu.constants import DEFAULT_KOMBU_HEADERS_MAPPING
-from service_kombu.constants import DEFAULT_KOMBU_CONNECT_HEARTBEAT
-from service_kombu.core.entrypoints.kombu.connection import Connection
+from service_kombu.constants import DEFAULT_KOMBU_AMQP_HEARTBEAT
+from service_kombu.constants import DEFAULT_KOMBU_AMQP_HEADERS_MAPPING
 
 from .producer import AMQPSubProducer
 
@@ -32,19 +32,24 @@ class AMQPSubConsumer(Entrypoint):
 
     producer = AMQPSubProducer()
 
-    def __init__(self, alias: t.Text, **kwargs: t.Text) -> None:
+    def __init__(
+            self,
+            alias: t.Text,
+            connect_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
+            consume_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
+            **kwargs: t.Text) -> None:
         """ 初始化实例
 
         @param alias: 配置别名
-        @param skip_inject: 跳过注入
-        @param skip_loaded: 跳过加载
+        @param connect_options: 连接配置
+        @param consume_options: 消费配置
+        @param kwargs: 其它配置
         """
         self.alias = alias
         self.connection = None
-        exec_timing = kwargs.pop('exec_timing', None)
-        self.connect_options = kwargs.get('connect_options', {})
-        self.consume_options = kwargs.get('consume_options', {})
-        super(AMQPSubConsumer, self).__init__(exec_timing=exec_timing)
+        self.connect_options = connect_options or {}
+        self.consume_options = consume_options or {}
+        super(AMQPSubConsumer, self).__init__(**kwargs)
 
     def setup(self) -> None:
         """ 生命周期 - 载入阶段
@@ -53,7 +58,7 @@ class AMQPSubConsumer(Entrypoint):
         """
         connect_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.connect_options', {})
         self.connect_options = connect_options | self.connect_options
-        self.connect_options.setdefault('heartbeat ', DEFAULT_KOMBU_CONNECT_HEARTBEAT)
+        self.connect_options.setdefault('heartbeat ', DEFAULT_KOMBU_AMQP_HEARTBEAT)
         self.connection = Connection(**self.connect_options)
         consume_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.consume_options', {})
         self.consume_options = consume_options | self.consume_options
@@ -99,7 +104,7 @@ class AMQPSubConsumer(Entrypoint):
         event = Event()
         tid = f'{self}.self_handle_request'
         args, kwargs = (body, message), {}
-        context = from_headers_to_context(message.headers, DEFAULT_KOMBU_HEADERS_MAPPING)
+        context = from_headers_to_context(message.headers, DEFAULT_KOMBU_AMQP_HEADERS_MAPPING)
         gt = self.container.spawn_worker_thread(self, args=args, kwargs=kwargs, context=context, tid=tid)
         gt.link(self._link_results, event)
         # 注意: 协程异常会导致收不到event最终内存溢出!

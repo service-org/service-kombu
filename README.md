@@ -7,7 +7,7 @@
 # 组件安装
 
 ```shell
-pip install -U service-kombu 
+pip install -U service-amqp 
 ```
 
 # 基础用法
