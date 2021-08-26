@@ -18,6 +18,10 @@ setup(
     long_description=readme,
     long_description_content_type='text/markdown',
     packages=find_packages(exclude=['test', 'test.*']),
+    install_requires=[
+        'service-core', 'service-green', 'kombu==5.1.0',
+        'amqp==5.0.6'
+    ],
     classifiers=[
         'Typing :: Typed',
         'Operating System :: MacOS',
@@ -26,5 +30,5 @@ setup(
         'Programming Language :: Python',
         'Programming Language :: Python :: 3.9',
     ],
-    install_requires=['service-core', 'kombu==5.1.0', 'amqp==5.0.6']
+
 )

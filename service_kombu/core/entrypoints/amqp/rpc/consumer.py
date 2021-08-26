@@ -11,17 +11,18 @@ import typing as t
 from logging import getLogger
 from eventlet.event import Event
 from kombu.message import Message
+from service_green.core.green import cjson
 from eventlet.greenthread import GreenThread
 from service_kombu.core.connect import Connection
 from service_core.core.context import WorkerContext
 from service_kombu.constants import KOMBU_CONFIG_KEY
 from service_core.core.service.entrypoint import Entrypoint
+from service_core.exchelper import gen_exception_description
 from service_kombu.core.convert import from_headers_to_context
 from service_kombu.constants import DEFAULT_KOMBU_AMQP_HEARTBEAT
 from service_kombu.constants import DEFAULT_KOMBU_AMQP_HEADERS_MAPPING
 
 from .listener import AMQPRpcListener
-from .producer import AmqpRpcProducer
 
 logger = getLogger(__name__)
 
@@ -32,7 +33,6 @@ class AMQPRpcConsumer(Entrypoint):
     name = 'AMQPRpcConsumer'
 
     listener = AMQPRpcListener()
-    producer = AMQPRpcProducer()
 
     def __init__(
             self,
@@ -53,6 +53,7 @@ class AMQPRpcConsumer(Entrypoint):
         self.connection = None
         self.connect_options = connect_options or {}
         self.consume_options = consume_options or {}
+        self.publish_options = publish_options or {}
         super(AMQPRpcConsumer, self).__init__(**kwargs)
 
     def setup(self) -> None:
@@ -69,14 +70,17 @@ class AMQPRpcConsumer(Entrypoint):
         # 防止YAML中声明值为None
         self.consume_options = (consume_options or {}) | self.consume_options
         self.consume_options.setdefault('callbacks', [self.handle_request])
-        self.producer.reg_extension(self)
+        publish_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.publish_options', {})
+        # 防止YAML中声明值为None
+        self.publish_options = (publish_options or {}) | self.publish_options
+        self.listener.reg_extension(self)
 
     def stop(self) -> None:
         """ 生命周期 - 停止阶段
 
         @return: None
         """
-        self.producer.del_extension(self)
+        self.listener.del_extension(self)
         self.connection and self.connection.release()
 
     def kill(self) -> None:
@@ -84,7 +88,7 @@ class AMQPRpcConsumer(Entrypoint):
 
         @return: None
         """
-        self.producer.del_extension(self)
+        self.listener.del_extension(self)
 
     @staticmethod
     def _link_results(gt: GreenThread, event: Event) -> None:
@@ -130,7 +134,8 @@ class AMQPRpcConsumer(Entrypoint):
         @param results: 结果对象
         @return: t.Any
         """
-        pass
+        errs, call_id = None, context.worker_request_id
+        return cjson.dumps({'code': 200, 'errs': None, 'data': results, 'call_id': call_id})
 
     def handle_errors(self, context: WorkerContext, excinfo: t.Tuple) -> t.Any:
         """ 处理异常结果
@@ -139,4 +144,7 @@ class AMQPRpcConsumer(Entrypoint):
         @param excinfo: 异常对象
         @return: t.Any
         """
-        pass
+        exc_type, exc_value, exc_trace = excinfo
+        data, call_id = None, context.worker_request_id
+        errs = gen_exception_description(exc_value)
+        return cjson.dumps({'code': 500, 'errs': errs, 'data': None, 'call_id': call_id})
