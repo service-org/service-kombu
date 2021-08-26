@@ -8,6 +8,8 @@ import sys
 import eventlet
 import typing as t
 
+from kombu import Queue
+from kombu import Exchange
 from logging import getLogger
 from eventlet.event import Event
 from kombu.message import Message
@@ -16,6 +18,7 @@ from eventlet.greenthread import GreenThread
 from service_kombu.core.connect import Connection
 from service_core.core.context import WorkerContext
 from service_kombu.constants import KOMBU_CONFIG_KEY
+from service_core.core.decorator import AsLazyProperty
 from service_core.core.service.entrypoint import Entrypoint
 from service_core.exchelper import gen_exception_description
 from service_kombu.core.convert import from_headers_to_context
@@ -55,6 +58,26 @@ class AMQPRpcConsumer(Entrypoint):
         self.consume_options = consume_options or {}
         self.publish_options = publish_options or {}
         super(AMQPRpcConsumer, self).__init__(**kwargs)
+
+    @AsLazyProperty
+    def listener_queue(self):
+        """ 监听者使用的队列 """
+        pass
+
+    @AsLazyProperty
+    def listener_exchange(self):
+        """ 监听者使用交换机 """
+        pass
+
+    @AsLazyProperty
+    def producer_queue(self):
+        """ 发布者使用的队列 """
+        pass
+
+    @AsLazyProperty
+    def producer_exchange(self):
+        """ 发布者使用交换机 """
+        pass
 
     def setup(self) -> None:
         """ 生命周期 - 载入阶段
