@@ -15,6 +15,7 @@ from eventlet.event import Event
 from kombu.message import Message
 from service_green.core.green import cjson
 from eventlet.greenthread import GreenThread
+from service_kombu.core.publish import Publisher
 from service_kombu.core.connect import Connection
 from service_core.core.context import WorkerContext
 from service_kombu.constants import KOMBU_CONFIG_KEY
@@ -25,7 +26,7 @@ from service_kombu.core.convert import from_headers_to_context
 from service_kombu.constants import DEFAULT_KOMBU_AMQP_HEARTBEAT
 from service_kombu.constants import DEFAULT_KOMBU_AMQP_HEADERS_MAPPING
 
-from .listener import AMQPRpcListener
+from .producer import AMQPRpcProducer
 
 logger = getLogger(__name__)
 
@@ -35,7 +36,7 @@ class AMQPRpcConsumer(Entrypoint):
 
     name = 'AMQPRpcConsumer'
 
-    listener = AMQPRpcListener()
+    producer = AMQPRpcProducer()
 
     def __init__(
             self,
@@ -43,7 +44,8 @@ class AMQPRpcConsumer(Entrypoint):
             connect_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             consume_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             publish_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
-            **kwargs: t.Text) -> None:
+            **kwargs: t.Text
+    ) -> None:
         """ 初始化实例
 
         @param alias: 配置别名
@@ -53,6 +55,7 @@ class AMQPRpcConsumer(Entrypoint):
         @param kwargs: 其它配置
         """
         self.alias = alias
+        self.publisher = None
         self.connection = None
         self.connect_options = connect_options or {}
         self.consume_options = consume_options or {}
@@ -60,24 +63,21 @@ class AMQPRpcConsumer(Entrypoint):
         super(AMQPRpcConsumer, self).__init__(**kwargs)
 
     @AsLazyProperty
-    def listener_queue(self):
-        """ 监听者使用的队列 """
-        pass
+    def routing_key(self):
+        """ 消费者绑定路由键 """
+        return f'{self.container.service.name}.{self.object_name}'
 
     @AsLazyProperty
-    def listener_exchange(self):
-        """ 监听者使用交换机 """
-        pass
+    def queue(self):
+        """ 消费者使用的队列 """
+        name = f'{self.container.service.name}.{self.object_name}'
+        return Queue(name=name, exchange=self.exchange, routing_key=self.routing_key)
 
     @AsLazyProperty
-    def producer_queue(self):
-        """ 发布者使用的队列 """
-        pass
-
-    @AsLazyProperty
-    def producer_exchange(self):
-        """ 发布者使用交换机 """
-        pass
+    def exchange(self):
+        """ 消费者使用交换机 """
+        name = f'{self.container.service.name}'
+        return Exchange(name=name, type='direct', auto_delete=True)
 
     def setup(self) -> None:
         """ 生命周期 - 载入阶段
@@ -93,17 +93,20 @@ class AMQPRpcConsumer(Entrypoint):
         # 防止YAML中声明值为None
         self.consume_options = (consume_options or {}) | self.consume_options
         self.consume_options.setdefault('callbacks', [self.handle_request])
+        self.consume_options.setdefault('queues', [self.queue])
         publish_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.publish_options', {})
         # 防止YAML中声明值为None
         self.publish_options = (publish_options or {}) | self.publish_options
-        self.listener.reg_extension(self)
+        self.publish_options.setdefault('serializer', 'json')
+        self.publisher = Publisher(self.connection, **self.publish_options)
+        self.producer.reg_extension(self)
 
     def stop(self) -> None:
         """ 生命周期 - 停止阶段
 
         @return: None
         """
-        self.listener.del_extension(self)
+        self.producer.del_extension(self)
         self.connection and self.connection.release()
 
     def kill(self) -> None:
@@ -111,7 +114,7 @@ class AMQPRpcConsumer(Entrypoint):
 
         @return: None
         """
-        self.listener.del_extension(self)
+        self.producer.del_extension(self)
 
     @staticmethod
     def _link_results(gt: GreenThread, event: Event) -> None:
@@ -149,6 +152,15 @@ class AMQPRpcConsumer(Entrypoint):
             if excinfo is None else
             self.handle_errors(context, excinfo)
         )
+
+    def send_response(self, body: t.Optional[t.Text, t.Dict[t.Text, t.Any]], **kwargs: t.Any) -> None:
+        """ 发送响应消息
+
+        @param body: 消息内容
+        @param kwargs: 命名参数
+        @return: None
+        """
+        body = cjson.dumps(body) if isinstance(body, dict) else body
 
     def handle_result(self, context: WorkerContext, results: t.Any) -> t.Any:
         """ 处理正常结果

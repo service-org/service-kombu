@@ -25,10 +25,10 @@ from service_core.core.service.extension import StoreExtension
 logger = getLogger(__name__)
 
 
-class AMQPRpcListener(Entrypoint, ShareExtension, StoreExtension):
-    """ AMQP消息订阅监听者类 """
+class AMQPRpcProducer(Entrypoint, ShareExtension, StoreExtension):
+    """ AMQP消息消费生产者类 """
 
-    name = 'AMQPRpcListener'
+    name = 'AMQPRpcProducer'
 
     def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
         """ 初始化实例
