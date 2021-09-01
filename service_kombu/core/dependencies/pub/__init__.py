@@ -53,8 +53,14 @@ class AMQPPubProducer(Dependency):
         publish_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.publish_options', {})
         # 防止YAML中声明值为None
         self.publish_options = (publish_options or {}) | self.publish_options
-        # 默认开启重试机制,防止开启心跳后超时被服务端主动踢下线
-        self.publish_options.setdefault('retry', True)
+        self.publish_options.setdefault('serializer', 'json')
+
+    def stop(self) -> None:
+        """ 生命周期 - 停止阶段
+
+        @return: None
+        """
+        self.connection and self.connection.release()
 
     def get_instance(self, context: WorkerContext) -> t.Any:
         """ 获取注入对象
@@ -62,4 +68,4 @@ class AMQPPubProducer(Dependency):
         @param context: 上下文对象
         @return: t.Any
         """
-        return Publisher(self.connection, **self.publish_options)
+        return Publisher(self.connection, context=context,  **self.publish_options)

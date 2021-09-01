@@ -98,10 +98,10 @@ class AMQPSubConsumer(Entrypoint):
             context = eventlet.getcurrent().context
         event.send((context, results, excinfo))
 
-    def handle_request(self, body: t.Any, message: Message) -> t.Tuple:
+    def handle_request(self, body: t.Any, message: Message) -> None:
         """ 处理工作请求
 
-        @return: t.Tuple
+        @return: None
         """
         event = Event()
         tid = f'{self}.self_handle_request'
@@ -111,28 +111,26 @@ class AMQPSubConsumer(Entrypoint):
         gt.link(self._link_results, event)
         # 注意: 协程异常会导致收不到event最终内存溢出!
         context, results, excinfo = event.wait()
-        # 注意: 不管成功或失败都尝试去自动确认这个消息!
-        message.ack()
         return (
             self.handle_result(context, results)
             if excinfo is None else
             self.handle_errors(context, excinfo)
         )
 
-    def handle_result(self, context: WorkerContext, results: t.Any) -> t.Any:
+    def handle_result(self, context: WorkerContext, results: t.Any) -> None:
         """ 处理正常结果
 
         @param context: 上下文对象
         @param results: 结果对象
-        @return: t.Any
+        @return: None
         """
         pass
 
-    def handle_errors(self, context: WorkerContext, excinfo: t.Tuple) -> t.Any:
+    def handle_errors(self, context: WorkerContext, excinfo: t.Tuple) -> None:
         """ 处理异常结果
 
         @param context: 上下文对象
         @param excinfo: 异常对象
-        @return: t.Any
+        @return: None
         """
         pass

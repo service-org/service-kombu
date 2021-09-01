@@ -101,7 +101,7 @@ class AMQPSubProducer(Entrypoint, ShareExtension, StoreExtension):
                 consumer.consume()
                 self.consumers.append(consumer)
                 logger.debug(f'{self} start consuming with {extension.consume_options}')
-                while True: extension.connection.drain_events()
+                while not self.stopped: extension.connection.drain_events()
                 # 优雅处理如ctrl + c, sys.exit, kill thread时的异常
             except (KeyboardInterrupt, SystemExit, GreenletExit):
                 break

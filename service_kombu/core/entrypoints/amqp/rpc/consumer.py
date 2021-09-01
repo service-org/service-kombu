@@ -19,7 +19,7 @@ from service_kombu.core.publish import Publisher
 from service_kombu.core.connect import Connection
 from service_core.core.context import WorkerContext
 from service_kombu.constants import KOMBU_CONFIG_KEY
-from service_core.core.decorator import AsLazyProperty
+from service_core.core.decorator import AsFriendlyFunc
 from service_core.core.service.entrypoint import Entrypoint
 from service_core.exchelper import gen_exception_description
 from service_kombu.core.convert import from_headers_to_context
@@ -55,28 +55,33 @@ class AMQPRpcConsumer(Entrypoint):
         @param kwargs: 其它配置
         """
         self.alias = alias
-        self.publisher = None
         self.connection = None
         self.connect_options = connect_options or {}
         self.consume_options = consume_options or {}
         self.publish_options = publish_options or {}
         super(AMQPRpcConsumer, self).__init__(**kwargs)
 
-    @AsLazyProperty
-    def routing_key(self):
-        """ 消费者绑定路由键 """
-        return f'{self.container.service.name}.{self.object_name}'
-
-    @AsLazyProperty
-    def queue(self):
-        """ 消费者使用的队列 """
-        name = f'{self.container.service.name}.{self.object_name}'
-        return Queue(name=name, exchange=self.exchange, routing_key=self.routing_key)
-
-    @AsLazyProperty
-    def exchange(self):
+    def get_exchange(self) -> Exchange:
         """ 消费者使用交换机 """
-        name = f'{self.container.service.name}'
+        exchange_name = self.container.service.name
+        return Exchange(name=exchange_name, type='direct', auto_delete=True)
+
+    def get_routing_key(self) -> t.Text:
+        """ 消费者绑定路由键 """
+        exchange_name = self.container.service.name
+        return f'{exchange_name}.{self.object_name}'
+
+    def get_queue(self) -> Queue:
+        """ 消费者使用的队列 """
+        exchange_name = self.container.service.name
+        queue_name = f'{exchange_name}.{self.object_name}'
+        exchange = self.get_exchange()
+        routing_key = self.get_routing_key()
+        return Queue(name=queue_name, exchange=exchange, routing_key=routing_key)
+
+    @staticmethod
+    def get_target_exchange(name: t.Text) -> Exchange:
+        """ 目标的使用交换机 """
         return Exchange(name=name, type='direct', auto_delete=True)
 
     def setup(self) -> None:
@@ -92,13 +97,12 @@ class AMQPRpcConsumer(Entrypoint):
         consume_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.consume_options', {})
         # 防止YAML中声明值为None
         self.consume_options = (consume_options or {}) | self.consume_options
-        self.consume_options.setdefault('callbacks', [self.handle_request])
-        self.consume_options.setdefault('queues', [self.queue])
+        self.consume_options.update({'callbacks': [self.handle_request]})
+        self.consume_options.update({'queues': [self.get_queue()]})
         publish_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.publish_options', {})
         # 防止YAML中声明值为None
         self.publish_options = (publish_options or {}) | self.publish_options
-        self.publish_options.setdefault('serializer', 'json')
-        self.publisher = Publisher(self.connection, **self.publish_options)
+        self.publish_options.update({'serializer': 'json'})
         self.producer.reg_extension(self)
 
     def stop(self) -> None:
@@ -117,6 +121,23 @@ class AMQPRpcConsumer(Entrypoint):
         self.producer.del_extension(self)
 
     @staticmethod
+    def is_rpc_request(message: Message) -> bool:
+        """ 是否是rpc请求
+
+        @param message: 消息对象
+        @return: bool
+        """
+        return (
+                'reply_to' in message.properties
+                and
+                message.properties['reply_to']
+                and
+                'correlation_id' in message.properties
+                and
+                message.properties['correlation_id']
+        )
+
+    @staticmethod
     def _link_results(gt: GreenThread, event: Event) -> None:
         """ 等待执行结果
 
@@ -132,11 +153,17 @@ class AMQPRpcConsumer(Entrypoint):
             context = eventlet.getcurrent().context
         event.send((context, results, excinfo))
 
-    def handle_request(self, body: t.Any, message: Message) -> t.Tuple:
+    def handle_request(self, body: t.Any, message: Message) -> None:
         """ 处理工作请求
 
         @return: t.Tuple
         """
+        # 如果是非RPC请求则尝试下自动确认然后强制返回
+        if not self.is_rpc_request(message):
+            message.ack()
+            errs = f'got invalid rpc request data {body} with {message}, ignore'
+            logger.warning(errs)
+            return
         event = Event()
         tid = f'{self}.self_handle_request'
         args, kwargs = (body, message), {}
@@ -145,41 +172,61 @@ class AMQPRpcConsumer(Entrypoint):
         gt.link(self._link_results, event)
         # 注意: 协程异常会导致收不到event最终内存溢出!
         context, results, excinfo = event.wait()
-        # 注意: 不管成功或失败都尝试去自动确认这个消息!
-        message.ack()
+        # 注意: RPC请求不管成功或失败都应该自动确认消息
+        AsFriendlyFunc(message.ack)()
         return (
-            self.handle_result(context, results)
+            self.handle_result(context, results, message)
             if excinfo is None else
-            self.handle_errors(context, excinfo)
+            self.handle_errors(context, excinfo, message)
         )
 
-    def send_response(self, body: t.Optional[t.Text, t.Dict[t.Text, t.Any]], **kwargs: t.Any) -> None:
+    def send_response(
+            self,
+            body: t.Union[t.Text, t.Dict[t.Text, t.Any]],
+            context: WorkerContext,
+            message: Message,
+            **kwargs: t.Any
+    ) -> None:
         """ 发送响应消息
 
         @param body: 消息内容
-        @param kwargs: 命名参数
+        @param context: 上下文对象
+        @param message: 消息对象
+        @param kwargs: 其它参数
         @return: None
         """
         body = cjson.dumps(body) if isinstance(body, dict) else body
+        reply_to = message.properties['reply_to']
+        correlation_id = message.properties['correlation_id']
+        target_exchange = self.get_target_exchange(reply_to.split('.', 1)[0])
+        Publisher(self.connection, context=context, **self.publish_options).publish(
+            body, exchange=target_exchange,
+            correlation_id=correlation_id,
+            routing_key=reply_to, **kwargs
+        )
 
-    def handle_result(self, context: WorkerContext, results: t.Any) -> t.Any:
+    def handle_result(self, context: WorkerContext, results: t.Any, message: Message) -> None:
         """ 处理正常结果
 
         @param context: 上下文对象
         @param results: 结果对象
-        @return: t.Any
+        @param message: 消息对象
+        @return: None
         """
         errs, call_id = None, context.worker_request_id
-        return cjson.dumps({'code': 200, 'errs': None, 'data': results, 'call_id': call_id})
+        body = cjson.dumps({'code': 200, 'errs': None, 'data': results, 'call_id': call_id})
+        self.send_response(body, context=context, message=message)
 
-    def handle_errors(self, context: WorkerContext, excinfo: t.Tuple) -> t.Any:
+    def handle_errors(self, context: WorkerContext, excinfo: t.Tuple, message: Message) -> None:
         """ 处理异常结果
 
         @param context: 上下文对象
         @param excinfo: 异常对象
-        @return: t.Any
+        @param message: 消息对象
+        @return: None
         """
         exc_type, exc_value, exc_trace = excinfo
         data, call_id = None, context.worker_request_id
         errs = gen_exception_description(exc_value)
-        return cjson.dumps({'code': 500, 'errs': errs, 'data': None, 'call_id': call_id})
+        body = cjson.dumps({'code': 500, 'errs': errs, 'data': None, 'call_id': call_id})
+        self.send_response(body, context=context, message=message)
