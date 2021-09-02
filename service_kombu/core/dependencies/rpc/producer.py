@@ -95,7 +95,6 @@ class AMQPRpcProxyProducer(Dependency, ShareExtension, StoreExtension):
                 if consume_connect_loss is True:
                     logger.debug(f'{self} consume_connect loss, start reconnecting')
                     extension.consume_connect = Connection(**extension.connect_options)
-                    logger.debug(f'{self} consume_connect lose, reconnect success')
                     consume_connect_loss = False
                 consumer = Consumer(extension.consume_connect, **extension.consume_options)
                 consumer.consume()

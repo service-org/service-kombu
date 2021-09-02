@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import sys
 import time
 import eventlet
 import typing as t
@@ -30,8 +29,8 @@ class AMQPRpcResponse(object):
         @param timeout: 等待响应超时时间
         """
         self.dependency = dependency
+        self.timeout = timeout or 1
         self.correlation_id = correlation_id
-        self.timeout = timeout or sys.maxsize
 
     @AsLazyProperty
     def result(self) -> t.Any:

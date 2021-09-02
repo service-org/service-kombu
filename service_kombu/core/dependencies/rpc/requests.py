@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import sys
 import typing as t
 
 from kombu import Exchange
@@ -18,6 +17,7 @@ from service_core.core.service.dependency import Dependency
 from .response import AMQPRpcResponse
 
 logger = getLogger(__name__)
+
 
 class AMQPRpcRequest(object):
     """ AMQP RPC请求处理器 """
@@ -59,5 +59,5 @@ class AMQPRpcRequest(object):
             exchange=target_exchange,
             correlation_id=correlation_id, **kwargs
         )
-        timeout = kwargs.get('timeout', sys.maxsize)
+        timeout = kwargs.get('timeout', 1)
         return AMQPRpcResponse(self.dependency, correlation_id, timeout=timeout)
