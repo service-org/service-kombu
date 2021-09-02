@@ -99,6 +99,8 @@ class AMQPRpcConsumer(Entrypoint):
         consume_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.consume_options', {})
         # 防止YAML中声明值为None
         self.consume_options = (consume_options or {}) | self.consume_options
+        # RPC请求成功失败都自动确认
+        self.consume_options.update({'no_ack': True})
         self.consume_options.update({'callbacks': [self.handle_request]})
         self.consume_options.update({'queues': [self.get_queue()]})
         publish_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.publish_options', {})
@@ -161,12 +163,11 @@ class AMQPRpcConsumer(Entrypoint):
 
         @return: t.Tuple
         """
-        # 如果是非RPC请求则尝试下自动确认然后强制返回
-        if not self.is_rpc_request(message):
-            message.ack()
-            errs = f'got invalid rpc request data {body} with {message}, ignore'
-            logger.warning(errs)
-            return
+        # 如果是非RPC请求则记录非法请求然后强制返回!
+        is_rpc_request = self.is_rpc_request(message)
+        warns = f'got invalid rpc request data {body} with {message}, ignore'
+        if not is_rpc_request: logger.warning(warns)
+        if not is_rpc_request: return
         event = Event()
         tid = f'{self}.self_handle_request'
         args, kwargs = (body, message), {}
@@ -175,8 +176,6 @@ class AMQPRpcConsumer(Entrypoint):
         gt.link(self._link_results, event)
         # 注意: 协程异常会导致收不到event最终内存溢出!
         context, results, excinfo = event.wait()
-        # 注意: RPC请求不管成功或失败都应该自动确认消息
-        AsFriendlyFunc(message.ack)()
         return (
             self.handle_result(context, results, message)
             if excinfo is None else

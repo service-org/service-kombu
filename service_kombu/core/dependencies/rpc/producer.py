@@ -1,0 +1,120 @@
+#! -*- coding: utf-8 -*-
+#
+# author: forcemain@163.com
+
+from __future__ import annotations
+
+import eventlet
+import typing as t
+
+from kombu import Consumer
+from logging import getLogger
+from greenlet import GreenletExit
+from kombu.exceptions import ChannelError
+from eventlet.greenthread import GreenThread
+from kombu.exceptions import ConnectionError
+from kombu.exceptions import OperationalError
+from kombu.exceptions import InconsistencyError
+from service_kombu.core.connect import Connection
+from service_core.core.spawning import SpawningProxy
+from service_core.core.decorator import AsFriendlyFunc
+from service_core.core.service.dependency import Dependency
+from service_core.core.service.extension import ShareExtension
+from service_core.core.service.extension import StoreExtension
+
+logger = getLogger(__name__)
+
+
+class AMQPRpcProxyProducer(Dependency, ShareExtension, StoreExtension):
+    """ AMQP RPC请求代理生产类  """
+
+    name = 'AMQPRpcProxyProducer'
+
+    def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
+        """ 初始化实例
+
+        @param args  : 位置参数
+        @param kwargs: 命名参数
+        """
+        self.gt_list = []
+        self.stopped = False
+        self.consumers = []
+
+        Dependency.__init__(self, *args, **kwargs)
+        ShareExtension.__init__(self, *args, **kwargs)
+        StoreExtension.__init__(self, *args, **kwargs)
+
+    def start(self) -> None:
+        """ 生命周期 - 启动阶段
+
+        @return: None
+        """
+        self.gt_list = [self.spawn_consumer_thread(e) for e in self.all_extensions]
+
+    def stop(self) -> None:
+        """ 生命周期 - 关闭阶段
+
+        @return: None
+        """
+        self.stopped = True
+        base_func = SpawningProxy(self.consumers).cancel
+        wait_func = AsFriendlyFunc(base_func)
+        self.consumers and wait_func()
+        self.kill()
+
+    def kill(self) -> None:
+        """ 生命周期 - 强杀阶段
+
+        @return: None
+        """
+        self.stopped = True
+        base_func = SpawningProxy(self.gt_list).kill
+        exception = (GreenletExit,)
+        kill_func = AsFriendlyFunc(base_func, all_exception=exception)
+        kill_func()
+
+    def spawn_consumer_thread(self, extension: Dependency) -> GreenThread:
+        """ 创建一个消费者协程
+
+        @param extension: 依赖对象
+        @return: GreenThread
+        """
+        func = self.consumer
+        args, kwargs, tid = (extension,), {}, f'{self}.self_consumer'
+        return self.container.spawn_splits_thread(func, args, kwargs, tid=tid)
+
+    def consumer(self, extension: Dependency) -> None:
+        """ 消费者协程的实现
+
+        @param extension: 依赖对象
+        @return: None
+        """
+        consumer, consume_connect_loss = None, False
+        while not self.stopped:
+            try:
+                if consume_connect_loss is True:
+                    logger.debug(f'{self} consume_connect loss, start reconnecting')
+                    extension.consume_connect = Connection(**extension.connect_options)
+                    logger.debug(f'{self} consume_connect lose, reconnect success')
+                    consume_connect_loss = False
+                consumer = Consumer(extension.consume_connect, **extension.consume_options)
+                consumer.consume()
+                self.consumers.append(consumer)
+                logger.debug(f'{self} start consuming with {extension.consume_options}')
+                while not self.stopped: extension.consume_connect.drain_events()
+                # 优雅处理如ctrl + c, sys.exit, kill thread时的异常
+            except (KeyboardInterrupt, SystemExit, GreenletExit):
+                break
+                # 优雅处理ConnectionError等连接异常断开异常会去自动重试
+            except (ConnectionError, ChannelError, OperationalError, InconsistencyError):
+                consume_connect_loss = True
+                # 如果之前建立过连接,暂不关心当前连接状态强制关闭掉当前连接
+                extension.consume_connect and AsFriendlyFunc(extension.consume_connect.release)()
+                logger.error(f'consume_connect error while consumer consume', exc_info=True)
+                eventlet.sleep(2)
+            except:
+                # 应该避免其它未知异常中断当前消费者导致任务无法被及时消费
+                logger.error(f'unexpected error while consumer consume', exc_info=True)
+                eventlet.sleep(1)
+            finally:
+                consumer in self.consumers and self.consumers.remove(consumer)
