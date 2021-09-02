@@ -37,18 +37,18 @@ class AMQPRpcResponse(object):
     def result(self) -> t.Any:
         """ 获取执行结果 """
         original = self.correlation_id
-        next_time = time.time() + self.timeout
+        stop_time = time.time() + self.timeout
         while self.correlation_id not in self.dependency.storage:
             if self.dependency.stopped:
                 break
-            if time.time() > next_time:
-                time_unit = 'seconds' if self.timeout > 1 else 'second'
-                errormsg = f'reach timeout({self.timeout} {time_unit})'
-                raise ReachTiming(errormsg=errormsg, original=original)
-            else:
+            if time.time() < stop_time:
                 eventlet.sleep(0.01)
+            else:
+                timeunit = 'seconds' if self.timeout > 1 else 'second'
+                errormsg = f'reach timeout({self.timeout} {timeunit})'
+                raise ReachTiming(errormsg=errormsg, original=original)
         if self.dependency.stopped: return
         body, message = self.dependency.storage.pop(self.correlation_id)
         data = cjson.loads(body)
-        if data['errs'] is None: return data['data']
+        if data['errs'] is None: return data['data'], message
         raise gen_exception_from_result(data['errs'])

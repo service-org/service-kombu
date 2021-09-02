@@ -34,6 +34,7 @@ class AMQPRpcProxy(Dependency):
     def __init__(
             self,
             alias: t.Text,
+            storage_buffer: t.Optional[int] = None,
             connect_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             consume_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             publish_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
@@ -51,7 +52,8 @@ class AMQPRpcProxy(Dependency):
         self.stopped = False
         self.consume_connect = None
         self.publish_connect = None
-        self.storage = {}
+        self.storage = {'_': []}
+        self.storage_buffer = storage_buffer or 100
         self.correlation_id = gen_curr_request_id()
         self.connect_options = connect_options or {}
         self.consume_options = consume_options or {}
@@ -110,13 +112,25 @@ class AMQPRpcProxy(Dependency):
         self.consume_connect and self.consume_connect.release()
         self.publish_connect and self.publish_connect.release()
 
+    def _clean_storage(self) -> None:
+        """ 清理当前缓存
+
+        @return: None
+        """
+        correlation_id = self.storage.get('_').pop(0)
+        self.storage.pop(correlation_id, None)
+
     def handle_request(self, body: t.Any, message: Message) -> None:
         """ 处理工作请求
 
         @return: t.Tuple
         """
         correlation_id = message.properties.get('correlation_id', None)
+        # 在缓存中记录所有消息的关联ID: correlation_id
+        correlation_id and self.storage.get('_').append(correlation_id)
         correlation_id and self.storage.update({correlation_id: (body, message)})
+        # 防止发送RPC请求但又不需要结果的情况导致内存溢出
+        len(self.storage.get('_')) > self.storage_buffer and self._clean_storage()
 
     def get_instance(self, context: WorkerContext) -> t.Any:
         """ 获取注入对象
