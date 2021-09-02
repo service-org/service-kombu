@@ -123,3 +123,20 @@ class AMQPRpcProxy(object):
         self.config = config
         self.connect_options = connect_options or {}
         self.consume_options = consume_options or {}
+
+    def __call__(
+            self,
+            alias: t.Text,
+            connect_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
+            consume_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
+            publish_options: t.Optional[t.Dict[t.Text, t.Any]] = None
+    ) -> AMQPRpcProxy:
+        """ 代理可调用
+
+        @param alias: 配置别名
+        @param connect_options: 连接配置
+        @param consume_options: 消费配置
+        @param publish_options: 发布配置
+        @return:
+        """
+        pass

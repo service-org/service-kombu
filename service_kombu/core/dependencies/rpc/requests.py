@@ -8,7 +8,6 @@ import typing as t
 
 from kombu import Exchange
 from logging import getLogger
-from kombu.serialization import registry
 from service_kombu.core.publish import Publisher
 from service_core.core.context import WorkerContext
 from service_core.core.as_helper import gen_curr_request_id
@@ -43,8 +42,6 @@ class AMQPRpcRequest(object):
         @param kwargs: 其它参数
         @return: t.Any
         """
-        serializer = self.dependency.publish_options['serializer']
-        body = registry.dumps(body, serializer=serializer)
         correlation_id = f'{target}.{gen_curr_request_id()}'
         reply_queue = self.dependency.get_queue()
         target_exchange = self.get_target_exchange(target.split('.', 1)[0])

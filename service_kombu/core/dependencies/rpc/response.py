@@ -9,7 +9,6 @@ import eventlet
 import typing as t
 
 from logging import getLogger
-from service_green.core.green import cjson
 from service_kombu.exception import ReachTiming
 from service_core.core.decorator import AsLazyProperty
 from service_core.core.service.dependency import Dependency
@@ -48,6 +47,5 @@ class AMQPRpcResponse(object):
                 raise ReachTiming(errormsg=errormsg, original=original)
         if self.dependency.stopped: return
         body, message = self.dependency.storage.pop(self.correlation_id)
-        data = cjson.loads(body)
-        if data['errs'] is None: return data['data'], message
-        raise gen_exception_from_result(data['errs'])
+        if body['errs'] is None: return body['data'], message
+        raise gen_exception_from_result(body['errs'])

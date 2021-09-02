@@ -13,13 +13,11 @@ from kombu import Exchange
 from logging import getLogger
 from eventlet.event import Event
 from kombu.message import Message
-from service_green.core.green import cjson
 from eventlet.greenthread import GreenThread
 from service_kombu.core.publish import Publisher
 from service_kombu.core.connect import Connection
 from service_core.core.context import WorkerContext
 from service_kombu.constants import KOMBU_CONFIG_KEY
-from service_core.core.decorator import AsFriendlyFunc
 from service_core.core.service.entrypoint import Entrypoint
 from service_core.exchelper import gen_exception_description
 from service_kombu.core.convert import from_headers_to_context
@@ -78,7 +76,7 @@ class AMQPRpcConsumer(Entrypoint):
         queue_name = f'{exchange_name}.{self.object_name}'
         exchange = self.get_exchange()
         routing_key = self.get_routing_key()
-        return Queue(name=queue_name, exchange=exchange, routing_key=routing_key)
+        return Queue(name=queue_name, exchange=exchange, routing_key=routing_key, durable=False, auto_delete=True)
 
     @staticmethod
     def get_target_exchange(name: t.Text) -> Exchange:
@@ -169,6 +167,7 @@ class AMQPRpcConsumer(Entrypoint):
         if not is_rpc_request: logger.warning(warns)
         if not is_rpc_request: return
         event = Event()
+        body = body[-1] if isinstance(body, list) and len(body) == 3 else body
         tid = f'{self}.self_handle_request'
         args, kwargs = (body, message), {}
         context = from_headers_to_context(message.headers, DEFAULT_KOMBU_AMQP_HEADERS_MAPPING)
@@ -184,7 +183,7 @@ class AMQPRpcConsumer(Entrypoint):
 
     def send_response(
             self,
-            body: t.Union[t.Text, t.Dict[t.Text, t.Any]],
+            body: t.Dict[t.Text, t.Any],
             context: WorkerContext,
             message: Message,
             **kwargs: t.Any
@@ -197,7 +196,6 @@ class AMQPRpcConsumer(Entrypoint):
         @param kwargs: 其它参数
         @return: None
         """
-        body = cjson.dumps(body) if isinstance(body, dict) else body
         reply_to = message.properties['reply_to']
         correlation_id = message.properties['correlation_id']
         target_exchange = self.get_target_exchange(reply_to.split('.', 1)[0])
@@ -216,7 +214,7 @@ class AMQPRpcConsumer(Entrypoint):
         @return: None
         """
         errs, call_id = None, context.worker_request_id
-        body = cjson.dumps({'code': 200, 'errs': None, 'data': results, 'call_id': call_id})
+        body = {'code': 200, 'errs': None, 'data': results, 'call_id': call_id}
         self.send_response(body, context=context, message=message)
 
     def handle_errors(self, context: WorkerContext, excinfo: t.Tuple, message: Message) -> None:
@@ -230,5 +228,5 @@ class AMQPRpcConsumer(Entrypoint):
         exc_type, exc_value, exc_trace = excinfo
         data, call_id = None, context.worker_request_id
         errs = gen_exception_description(exc_value)
-        body = cjson.dumps({'code': 500, 'errs': errs, 'data': None, 'call_id': call_id})
+        body = {'code': 500, 'errs': errs, 'data': None, 'call_id': call_id}
         self.send_response(body, context=context, message=message)

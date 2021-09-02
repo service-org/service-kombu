@@ -8,7 +8,7 @@ import typing as t
 
 from service_core.cli.subctxs import BaseContext
 from service_core.core.configure import Configure
-from service_consul.core.proxy import AMQPRpcProxy
+from service_kombu.core.proxy import AMQPRpcProxy
 
 
 class AMQPRpcClient(BaseContext):

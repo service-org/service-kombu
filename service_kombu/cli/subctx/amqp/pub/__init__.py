@@ -8,7 +8,7 @@ import typing as t
 
 from service_core.cli.subctxs import BaseContext
 from service_core.core.configure import Configure
-from service_consul.core.proxy import AMQPPubProxy
+from service_kombu.core.proxy import AMQPPubProxy
 
 
 class AMQPPubClient(BaseContext):
@@ -21,5 +21,5 @@ class AMQPPubClient(BaseContext):
 
         @param config: 配置对象
         """
-        super(AMQPPubClient, self).__init__()
+        super(AMQPPubClient, self).__init__(config)
         self.proxy = AMQPPubProxy(config=config)
