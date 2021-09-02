@@ -35,7 +35,7 @@ class AMQPPubProducer(Dependency):
         @param kwargs: 其它配置
         """
         self.alias = alias
-        self.connection = None
+        self.publish_connect = None
         self.connect_options = connect_options or {}
         self.publish_options = publish_options or {}
         super(AMQPPubProducer, self).__init__(**kwargs)
@@ -49,7 +49,7 @@ class AMQPPubProducer(Dependency):
         # 防止YAML中声明值为None
         self.connect_options = (connect_options or {}) | self.connect_options
         self.connect_options.setdefault('heartbeat ', DEFAULT_KOMBU_AMQP_HEARTBEAT)
-        self.connection = Connection(**self.connect_options)
+        self.publish_connect = Connection(**self.connect_options)
         publish_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.publish_options', {})
         # 防止YAML中声明值为None
         self.publish_options = (publish_options or {}) | self.publish_options
@@ -60,7 +60,7 @@ class AMQPPubProducer(Dependency):
 
         @return: None
         """
-        self.connection and self.connection.release()
+        self.publish_connect and self.publish_connect.release()
 
     def get_instance(self, context: WorkerContext) -> t.Any:
         """ 获取注入对象
@@ -68,4 +68,4 @@ class AMQPPubProducer(Dependency):
         @param context: 上下文对象
         @return: t.Any
         """
-        return Publisher(self.connection, context=context,  **self.publish_options)
+        return Publisher(self.publish_connect, context=context,  **self.publish_options)

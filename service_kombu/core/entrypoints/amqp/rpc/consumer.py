@@ -55,7 +55,8 @@ class AMQPRpcConsumer(Entrypoint):
         @param kwargs: 其它配置
         """
         self.alias = alias
-        self.connection = None
+        self.consume_connect = None
+        self.publish_connect = None
         self.connect_options = connect_options or {}
         self.consume_options = consume_options or {}
         self.publish_options = publish_options or {}
@@ -93,7 +94,8 @@ class AMQPRpcConsumer(Entrypoint):
         # 防止YAML中声明值为None
         self.connect_options = (connect_options or {}) | self.connect_options
         self.connect_options.setdefault('heartbeat ', DEFAULT_KOMBU_AMQP_HEARTBEAT)
-        self.connection = Connection(**self.connect_options)
+        self.consume_connect = Connection(**self.connect_options)
+        self.publish_connect = Connection(**self.connect_options)
         consume_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.consume_options', {})
         # 防止YAML中声明值为None
         self.consume_options = (consume_options or {}) | self.consume_options
@@ -111,7 +113,8 @@ class AMQPRpcConsumer(Entrypoint):
         @return: None
         """
         self.producer.del_extension(self)
-        self.connection and self.connection.release()
+        self.consume_connect and self.consume_connect.release()
+        self.publish_connect and self.publish_connect.release()
 
     def kill(self) -> None:
         """ 生命周期 - 强杀阶段
@@ -199,7 +202,7 @@ class AMQPRpcConsumer(Entrypoint):
         reply_to = message.properties['reply_to']
         correlation_id = message.properties['correlation_id']
         target_exchange = self.get_target_exchange(reply_to.split('.', 1)[0])
-        Publisher(self.connection, context=context, **self.publish_options).publish(
+        Publisher(self.publish_connect, context=context, **self.publish_options).publish(
             body, exchange=target_exchange,
             correlation_id=correlation_id,
             routing_key=reply_to, **kwargs

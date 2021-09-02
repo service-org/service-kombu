@@ -149,11 +149,40 @@ class AMQPRpcProxy(Dependency):
         @param consume_options: 消费参数
         @return: None
         """
-        consumer = Consumer(self.consume_connect, **consume_options)
-        consumer.consume()
-        logger.debug(f'{self} start consuming with {consume_options}')
+        consumer, consume_connect_loss = None, False
         while not self.stopped or correlation_id not in self.storage:
-            self.consume_connect.drain_events()
+            try:
+                if consume_connect_loss is True:
+                    logger.debug(f'{self} consume_connect loss, start reconnecting')
+                    self.consume_connect = Connection(**connect_options)
+                    logger.debug(f'{self} consume_connect lose, reconnect success')
+                    consume_connect_loss = False
+                consumer = Consumer(self.consume_connect, **consume_options)
+                consumer.consume()
+                self.consumers.append(consumer)
+                logger.debug(f'{self} start consuming with {consume_options}')
+                while not self.stopped or correlation_id not in self.storage:
+                    self.consume_connect.drain_events()
+                # 优雅处理如ctrl + c, sys.exit, kill thread时的异常
+            except (KeyboardInterrupt, SystemExit, GreenletExit):
+                logger.error('xxxxxx', exc_info=True)
+                break
+                # 优雅处理ConnectionError等连接异常断开异常会去自动重试
+            except (ConnectionError, ChannelError, OperationalError, InconsistencyError):
+                consume_connect_loss = True
+                # 如果之前建立过连接,暂不关心当前连接状态强制关闭掉当前连接
+                self.consume_connect and AsFriendlyFunc(self.consume_connect.release)()
+                logger.error(f'consume_connect error while consumer consume', exc_info=True)
+                eventlet.sleep(2)
+                # 上面设置了drain_events等待事件的时间,这里忽略超时异常
+            except (socket.timeout,):
+                continue
+            except:
+                # 应该避免其它未知异常中断当前消费者导致任务无法被及时消费
+                logger.error(f'unexpected error while consumer consume', exc_info=True)
+                eventlet.sleep(1)
+            finally:
+                consumer in self.consumers and self.consumers.remove(consumer)
 
     def _get_results(self, correlation_id: t.Text) -> t.Any:
         """ 获取对端的响应
@@ -184,8 +213,6 @@ class AMQPRpcProxy(Dependency):
         reply_queue = self.get_queue(correlation_id)
         connect_options = self.connect_options.copy()
         consume_options = self.consume_options.copy()
-        consume_options.update({'callbacks': [self.handle_request]})
-        consume_options.update({'queues': [reply_queue]})
         tid = f'{self}.self_run_consume'
         args = (correlation_id, connect_options, consume_options)
         gt = self.container.spawn_splits_thread(self._run_consume, args, {}, tid=tid)
@@ -200,6 +227,8 @@ class AMQPRpcProxy(Dependency):
         # unit = 'seconds' if timeout > 1 else 'second'
         # errs = f'reach timeout({timeout} {unit})'
         # exception = ReachTiming(errormsg=errs, original=target)
+        # self.consume_options.update({'callbacks': [self.handle_request]})
+        # self.consume_options.update({'queues': [reply_queue]})
         # timer = eventlet.Timeout(timeout, exception)
         gt.wait()
         return self._get_results(correlation_id)

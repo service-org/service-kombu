@@ -89,28 +89,28 @@ class AMQPRpcProducer(Entrypoint, ShareExtension, StoreExtension):
         @param extension: 入口对象
         @return: None
         """
-        consumer, connection_loss = None, False
+        consumer, consume_connect_loss = None, False
         while not self.stopped:
             try:
-                if connection_loss is True:
-                    logger.debug(f'{self} connection loss, start reconnecting')
-                    extension.connection = Connection(**extension.connect_options)
-                    logger.debug(f'{self} connection lose, reconnect success')
-                    connection_loss = False
-                consumer = Consumer(extension.connection, **extension.consume_options)
+                if consume_connect_loss is True:
+                    logger.debug(f'{self} consume_connect loss, start reconnecting')
+                    extension.consume_connect = Connection(**extension.connect_options)
+                    logger.debug(f'{self} consume_connect lose, reconnect success')
+                    consume_connect_loss = False
+                consumer = Consumer(extension.consume_connect, **extension.consume_options)
                 consumer.consume()
                 self.consumers.append(consumer)
                 logger.debug(f'{self} start consuming with {extension.consume_options}')
-                while not self.stopped: extension.connection.drain_events()
+                while not self.stopped: extension.consume_connect.drain_events()
                 # 优雅处理如ctrl + c, sys.exit, kill thread时的异常
             except (KeyboardInterrupt, SystemExit, GreenletExit):
                 break
                 # 优雅处理ConnectionError等连接异常断开异常会去自动重试
             except (ConnectionError, ChannelError, OperationalError, InconsistencyError):
-                connection_loss = True
+                consume_connect_loss = True
                 # 如果之前建立过连接,暂不关心当前连接状态强制关闭掉当前连接
-                extension.connection and AsFriendlyFunc(extension.connection.release)()
-                logger.error(f'connection error while consumer consume', exc_info=True)
+                extension.consume_connect and AsFriendlyFunc(extension.consume_connect.release)()
+                logger.error(f'consume_connect error while consumer consume', exc_info=True)
                 eventlet.sleep(2)
             except:
                 # 应该避免其它未知异常中断当前消费者导致任务无法被及时消费

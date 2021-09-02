@@ -46,7 +46,7 @@ class AMQPSubConsumer(Entrypoint):
         @param kwargs: 其它配置
         """
         self.alias = alias
-        self.connection = None
+        self.consume_connect = None
         self.connect_options = connect_options or {}
         self.consume_options = consume_options or {}
         super(AMQPSubConsumer, self).__init__(**kwargs)
@@ -60,7 +60,7 @@ class AMQPSubConsumer(Entrypoint):
         # 防止YAML中声明值为None
         self.connect_options = (connect_options or {}) | self.connect_options
         self.connect_options.setdefault('heartbeat ', DEFAULT_KOMBU_AMQP_HEARTBEAT)
-        self.connection = Connection(**self.connect_options)
+        self.consume_connect = Connection(**self.connect_options)
         consume_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.consume_options', {})
         # 防止YAML中声明值为None
         self.consume_options = (consume_options or {}) | self.consume_options
@@ -73,7 +73,7 @@ class AMQPSubConsumer(Entrypoint):
         @return: None
         """
         self.producer.del_extension(self)
-        self.connection and self.connection.release()
+        self.consume_connect and self.consume_connect.release()
 
     def kill(self) -> None:
         """ 生命周期 - 强杀阶段
