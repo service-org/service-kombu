@@ -43,6 +43,7 @@ class AMQPRpcProxy(Dependency):
         """ 初始化实例
 
         @param alias: 配置别名
+        @param storage_buffer: 缓存大小
         @param connect_options: 连接配置
         @param consume_options: 消费配置
         @param publish_options: 发布配置
@@ -90,11 +91,11 @@ class AMQPRpcProxy(Dependency):
         self.consume_connect = Connection(**self.connect_options)
         self.publish_connect = Connection(**self.connect_options)
         consume_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.consume_options', {})
-        consume_options.update({'callbacks': [self.handle_request]})
-        consume_options.update({'queues': [self.get_queue()]})
         # 防止YAML中声明值为None
         self.consume_options = (consume_options or {}) | self.consume_options
         self.consume_options.update({'no_ack': True})
+        self.consume_options.update({'callbacks': [self.handle_request]})
+        self.consume_options.update({'queues': [self.get_queue()]})
         publish_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.publish_options', {})
         # 防止YAML中声明值为None
         self.publish_options = (publish_options or {}) | self.publish_options
@@ -112,18 +113,12 @@ class AMQPRpcProxy(Dependency):
         self.publish_connect and self.publish_connect.release()
 
     def _clean_storage(self) -> None:
-        """ 清理当前缓存
-
-        @return: None
-        """
+        """ 清理当前缓存 """
         correlation_id = self.storage.get('_').pop(0)
         self.storage.pop(correlation_id, None)
 
     def handle_request(self, body: t.Any, message: Message) -> None:
-        """ 处理工作请求
-
-        @return: t.Tuple
-        """
+        """ 处理工作请求 """
         correlation_id = message.properties.get('correlation_id', None)
         # 在缓存中记录所有消息的关联ID: correlation_id
         correlation_id and self.storage.get('_').append(correlation_id)

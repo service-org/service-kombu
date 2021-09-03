@@ -9,9 +9,7 @@ import typing as t
 from kombu import Exchange
 from logging import getLogger
 from service_kombu.core.publish import Publisher
-from service_core.core.context import WorkerContext
 from service_core.core.as_helper import gen_curr_request_id
-from service_core.core.service.dependency import Dependency
 
 from .response import AMQPRpcResponse
 
@@ -21,13 +19,12 @@ logger = getLogger(__name__)
 class AMQPRpcRequest(object):
     """ AMQP RPC请求处理器 """
 
-    def __init__(self, dependency: Dependency, context: t.Optional[WorkerContext] = None) -> None:
+    def __init__(self, proxy: 'AMQPRpcStandaloneProxy') -> None:
         """ 初始化实例
-        @param dependency: 依赖对象
-        @param context: 上下文对象
+        
+        @param proxy: 代理对象
         """
-        self.context = context
-        self.dependency = dependency
+        self.proxy = proxy
 
     @staticmethod
     def get_target_exchange(name: t.Text) -> Exchange:
@@ -40,15 +37,14 @@ class AMQPRpcRequest(object):
         @param target: 目标节点
         @param body: 发送内容
         @param kwargs: 其它参数
-        @return: AMQPRpcResponse
+        @return: t.Any
         """
         correlation_id = f'{target}.{gen_curr_request_id()}'
-        reply_queue = self.dependency.get_queue()
+        reply_queue = self.proxy.get_queue()
         target_exchange = self.get_target_exchange(target.split('.', 1)[0])
         publisher = Publisher(
-            self.dependency.publish_connect,
-            context=self.context,
-            **self.dependency.publish_options
+            self.proxy.publish_connect,
+            **self.proxy.publish_options
         )
         publisher.publish(
             body, routing_key=target,
@@ -57,4 +53,4 @@ class AMQPRpcRequest(object):
             correlation_id=correlation_id, **kwargs
         )
         timeout = kwargs.get('timeout', 1)
-        return AMQPRpcResponse(self.dependency, correlation_id, timeout=timeout)
+        return AMQPRpcResponse(self.proxy, correlation_id, timeout=timeout)
