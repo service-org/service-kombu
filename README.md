@@ -130,11 +130,62 @@ service = Service()
 
 > core start facade --debug
 
+# 框架集成
+
+```python
+#! -*- coding: utf-8 -*-
+#
+# author: forcemain@163.com
+
+from __future__ import annotations
+
+import time
+
+from kombu import Exchange
+from service_kombu.constants import KOMBU_CONFIG_KEY
+from service_kombu.core.standalone.amqp.pub import AMQPPubStandaloneProxy
+from service_kombu.core.standalone.amqp.rpc import AMQPRpcStandaloneProxy
+
+config = {KOMBU_CONFIG_KEY: {'connect_options': {'hostname': 'pyamqp://admin:nimda@127.0.0.1:5672//'}}}
+
+# 其它框架集成PUB消息发布示例
+with AMQPPubStandaloneProxy(config=config) as pub:
+    target = 'demo.test_amqp_rpc'
+    pub.publish({}, exchange=Exchange(target.split('.', 1)[0]), routing_key=target)
+
+# 其它框架集成RPC请求调用示例
+start_time = time.time()
+with AMQPRpcStandaloneProxy(config=config) as rpc:
+    target = 'demo.test_amqp_rpc'
+    body, message = rpc.send_request(target, {}, timeout=1).result
+    print(f'got response from {target}: body={body} message: {message} in {time.time() - start_time}s')
+```
+
 # 接口调试
 
 > core shell --shell `shell`
 
 ```shell
+* eventlet 0.31.1
+    - platform: macOS 10.15.7
+      error  : changelist must be an iterable of select.kevent objects
+      issue  : https://github.com/eventlet/eventlet/issues/670#issuecomment-735488189
+    - platform: macOS 10.15.7
+      error  : monkey_patch causes issues with dns .local #694
+      issue  : https://github.com/eventlet/eventlet/issues/694#issuecomment-806100692
+
+2021-09-05 21:06:51,323 - 83335 - DEBUG - load subcmd service_core.cli.subcmds.debug:Debug succ
+2021-09-05 21:06:51,324 - 83335 - DEBUG - load subcmd service_core.cli.subcmds.shell:Shell succ
+2021-09-05 21:06:51,324 - 83335 - DEBUG - load subcmd service_core.cli.subcmds.config:Config succ
+2021-09-05 21:06:51,325 - 83335 - DEBUG - load subcmd service_sqlalchemy.cli.subcmds.migrate:Alembic succ
+2021-09-05 21:06:51,333 - 83335 - DEBUG - load subcmd service_core.cli.subcmds.start:Start succ
+2021-09-05 21:06:51,587 - 83335 - DEBUG - load subctx service_core.cli.subctxs.config:Config succ
+2021-09-05 21:06:51,587 - 83335 - DEBUG - load subctx service_consul.cli.subctxs.consul:Consul succ
+2021-09-05 21:06:51,587 - 83335 - DEBUG - load subctx service_kombu.cli.subctx.amqp:AMQP succ
+CPython - 3.9.6 (v3.9.6:db3ff76da1, Jun 28 2021, 11:49:53) [Clang 6.0 (clang-600.0.57)]
+>>> with s.amqp.rpc.proxy(alias='test') as rpc:
+...     rpc.send_request(f'demo.test_amqp_rpc', {}, timeout=1).result
+({'response_from_test_amqp_rpc': {}}, <Message object at 0x7ff0b47dc670 with details {'state': 'RECEIVED', 'content_type': 'application/json', 'delivery_tag': 1, 'body_length': 119, 'properties': {'correlation_id': 'demo.test_amqp_rpc.abdcae97ea1e46f28930aea45b4d20ea'}, 'delivery_info': {'exchange': 'service', 'routing_key': 'service.amqp.rpc.standalone.proxy.0d71a700f7f243479a23721401cabfb4'}}>)
 ```
 
 # 运行调试

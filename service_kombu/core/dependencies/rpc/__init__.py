@@ -122,7 +122,6 @@ class AMQPRpcProxy(Dependency):
         correlation_id = message.properties.get('correlation_id', None)
         # 在缓存中记录所有消息的关联ID: correlation_id
         correlation_id and self.storage.get('_').append(correlation_id)
-        body = body[-1] if isinstance(body, list) and len(body) == 3 else body
         correlation_id and self.storage.update({correlation_id: (body, message)})
         # 防止发送RPC请求但又不需要结果的情况导致内存溢出
         len(self.storage.get('_')) > self.storage_buffer and self._clean_storage()

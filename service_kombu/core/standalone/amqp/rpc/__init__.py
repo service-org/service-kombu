@@ -40,6 +40,7 @@ class AMQPRpcStandaloneProxy(object):
         """
         self.config = config
         self.stopped = False
+        self.queue_declared = False
         self.storage = {'_': []}
         self.correlation_id = gen_curr_request_id()
         self.storage_buffer = storage_buffer or 100
@@ -71,10 +72,23 @@ class AMQPRpcStandaloneProxy(object):
 
     def get_queue(self) -> Queue:
         """ 消费者使用的队列 """
+
+        def on_queue_declared(*args: t.Any, **kwargs: t.Any) -> None:
+            """ 回调时设置标志位
+
+            @param args  : 位置参数
+            @param kwargs: 命名参数
+            @return: None
+            """
+            self.queue_declared = True
+
         exchange_name = DEFAULT_KOMBU_AMQP_REPLY_EXCHANGE_NAME
         exchange, routing_key = self.get_exchange(), self.get_routing_key()
         queue_name = f'{exchange_name}.amqp.rpc.standalone.proxy.{self.correlation_id}'
-        return Queue(name=queue_name, exchange=exchange, routing_key=routing_key, durable=False, auto_delete=True)
+        return Queue(
+            name=queue_name, exchange=exchange, routing_key=routing_key,
+            durable=False, auto_delete=True, on_declared=on_queue_declared
+        )
 
     @staticmethod
     def get_target_exchange(name: t.Text) -> Exchange:
@@ -91,7 +105,6 @@ class AMQPRpcStandaloneProxy(object):
         correlation_id = message.properties.get('correlation_id', None)
         # 在缓存中记录所有消息的关联ID: correlation_id
         correlation_id and self.storage.get('_').append(correlation_id)
-        body = body[-1] if isinstance(body, list) and len(body) == 3 else body
         correlation_id and self.storage.update({correlation_id: (body, message)})
         # 防止发送RPC请求但又不需要结果的情况导致内存溢出
         len(self.storage.get('_')) > self.storage_buffer and self._clean_storage()
@@ -127,11 +140,15 @@ class AMQPRpcStandaloneProxy(object):
     def __enter__(self):
         """ 创建时回调 """
         self.consume_thread.start()
+        # 发送消息前必须保证回复队列已经成功声明否则收不到消息
+        while not self.queue_declared: time.sleep(0.01)
         return AMQPRpcRequest(self)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """ 销毁时回调 """
         self.stopped = True
+        # 使用ctypes模块根据consume线程标识向其发送终止信号
         safe_kill_thread(self.consume_thread, SystemExit)
-        self.consume_connect and self.consume_connect.release()
-        self.publish_connect and self.consume_connect.release()
+        # TODO: 调用consume和publish的release会阻塞无返回
+        # 由于默认已经开启心跳机制所以此处服务端会自行回收连接
+        del self.consume_connect, self.publish_connect

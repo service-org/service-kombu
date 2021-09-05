@@ -42,15 +42,10 @@ class AMQPRpcRequest(object):
         correlation_id = f'{target}.{gen_curr_request_id()}'
         reply_queue = self.proxy.get_queue()
         target_exchange = self.get_target_exchange(target.split('.', 1)[0])
-        publisher = Publisher(
-            self.proxy.publish_connect,
-            **self.proxy.publish_options
-        )
-        publisher.publish(
-            body, routing_key=target,
-            reply_to=reply_queue.name,
-            exchange=target_exchange,
-            correlation_id=correlation_id, **kwargs
-        )
+        publisher = Publisher(self.proxy.publish_connect, **self.proxy.publish_options)
+        publisher.publish(body, routing_key=target,
+                          reply_to=reply_queue.name,
+                          exchange=target_exchange,
+                          correlation_id=correlation_id, **kwargs)
         timeout = kwargs.get('timeout', 1)
         return AMQPRpcResponse(self.proxy, correlation_id, timeout=timeout)

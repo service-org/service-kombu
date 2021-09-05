@@ -167,7 +167,6 @@ class AMQPRpcConsumer(Entrypoint):
         if not is_rpc_request: logger.warning(warns)
         if not is_rpc_request: return
         event = Event()
-        body = body[-1] if isinstance(body, list) and len(body) == 3 else body
         tid = f'{self}.self_handle_request'
         args, kwargs = (body, message), {}
         context = from_headers_to_context(message.headers, DEFAULT_KOMBU_AMQP_HEADERS_MAPPING)
