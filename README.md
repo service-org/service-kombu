@@ -16,7 +16,7 @@ pip install -U service-kombu
 
 ```yaml
 CONTEXT:
-  - service_kombu.cli.subctxs.kombu:Kombu
+  - service_kombu.cli.subctxs.amqp:AMQP
 KOMBU:
   test:
     connect_options:
