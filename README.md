@@ -177,10 +177,8 @@ with AMQPRpcStandaloneProxy(config=config) as rpc:
 2021-09-05 21:06:51,323 - 83335 - DEBUG - load subcmd service_core.cli.subcmds.debug:Debug succ
 2021-09-05 21:06:51,324 - 83335 - DEBUG - load subcmd service_core.cli.subcmds.shell:Shell succ
 2021-09-05 21:06:51,324 - 83335 - DEBUG - load subcmd service_core.cli.subcmds.config:Config succ
-2021-09-05 21:06:51,325 - 83335 - DEBUG - load subcmd service_sqlalchemy.cli.subcmds.migrate:Alembic succ
 2021-09-05 21:06:51,333 - 83335 - DEBUG - load subcmd service_core.cli.subcmds.start:Start succ
 2021-09-05 21:06:51,587 - 83335 - DEBUG - load subctx service_core.cli.subctxs.config:Config succ
-2021-09-05 21:06:51,587 - 83335 - DEBUG - load subctx service_consul.cli.subctxs.consul:Consul succ
 2021-09-05 21:06:51,587 - 83335 - DEBUG - load subctx service_kombu.cli.subctx.amqp:AMQP succ
 CPython - 3.9.6 (v3.9.6:db3ff76da1, Jun 28 2021, 11:49:53) [Clang 6.0 (clang-600.0.57)]
 >>> with s.amqp.rpc.proxy(alias='test') as rpc:
