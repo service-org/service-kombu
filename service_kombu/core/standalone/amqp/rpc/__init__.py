@@ -117,6 +117,8 @@ class AMQPRpcStandaloneProxy(object):
                 if consume_connect_loss is True:
                     logger.debug(f'{self} consume_connect loss, start reconnecting')
                     self.consume_connect = Connection(**self.connect_options)
+                    self.consume_connect.connect()
+                    logger.debug(f'{self} consume_connect loss, reconnect success')
                     consume_connect_loss = False
                 consumer = Consumer(self.consume_connect, **self.consume_options)
                 consumer.consume()
