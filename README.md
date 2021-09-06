@@ -142,11 +142,10 @@ from __future__ import annotations
 import time
 
 from kombu import Exchange
-from service_kombu.constants import KOMBU_CONFIG_KEY
 from service_kombu.core.standalone.amqp.pub import AMQPPubStandaloneProxy
 from service_kombu.core.standalone.amqp.rpc import AMQPRpcStandaloneProxy
 
-config = {KOMBU_CONFIG_KEY: {'connect_options': {'hostname': 'pyamqp://admin:nimda@127.0.0.1:5672//'}}}
+config = {'connect_options': {'hostname': 'pyamqp://admin:nimda@127.0.0.1:5672//'}}
 
 # 其它框架集成PUB消息发布示例
 with AMQPPubStandaloneProxy(config=config) as pub:
