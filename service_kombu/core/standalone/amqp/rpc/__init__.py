@@ -54,7 +54,7 @@ class AMQPRpcStandaloneProxy(object):
         self.publish_options.setdefault('serializer', 'json')
         self.publish_connect = Connection(**self.connect_options)
         # 应该在内部逻辑层面防止此线程异常退出但同时需要设置daemon=True和主进程一起生死与共
-        name = f'amqp.rpc.standalone.proxy.consume.{self.correlation_id}'
+        name = f'amqp.rpc.standalone.proxy.{self.correlation_id}'
         self.consume_thread = Thread(target=self.consume, name=name, daemon=True)
 
     @staticmethod
