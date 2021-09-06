@@ -5,12 +5,14 @@
 from __future__ import annotations
 
 import time
+import socket
 import typing as t
 
 from kombu import Queue
 from kombu import Consumer
 from kombu import Exchange
 from threading import Thread
+from functools import partial
 from logging import getLogger
 from kombu.message import Message
 from kombu.exceptions import ChannelError
@@ -23,7 +25,6 @@ from service_core.core.as_helper import gen_curr_request_id
 from service_kombu.constants import DEFAULT_KOMBU_AMQP_REPLY_EXCHANGE_NAME
 
 from .requests import AMQPRpcRequest
-from .safekill import safe_kill_thread
 
 logger = getLogger(__name__)
 
@@ -120,7 +121,10 @@ class AMQPRpcStandaloneProxy(object):
                 consumer = Consumer(self.consume_connect, **self.consume_options)
                 consumer.consume()
                 logger.debug(f'{self} start consuming with {self.consume_options}')
-                while not self.stopped: self.consume_connect.drain_events()
+                # ctypes强制杀掉线程会导致consume_connect连接无法释放
+                while not self.stopped:
+                    func = partial(self.consume_connect.drain_events, timeout=0.01)
+                    AsFriendlyFunc(func=func, all_exception=(socket.timeout,))()
                 # 优雅处理如ctrl + c, sys.exit, kill thread时的异常
             except (KeyboardInterrupt, SystemExit):
                 break
@@ -136,19 +140,24 @@ class AMQPRpcStandaloneProxy(object):
                 logger.error(f'unexpected error while consumer consume', exc_info=True)
                 time.sleep(1)
 
-    def __enter__(self):
-        """ 创建时回调 """
+    def as_inst(self) -> AMQPRpcRequest:
+        """ 创建时逻辑 """
         self.consume_thread.start()
         # 发送消息前必须保证回复队列已经成功声明否则收不到消息
-        while not self.queue_declared:
-            time.sleep(0.01)
+        while not self.queue_declared: time.sleep(0.01)
         return AMQPRpcRequest(self)
+
+    def release(self) -> None:
+        """ 销毁时逻辑 """
+        self.stopped = True
+        # 与其它框架集成时切记清理掉用于消费和发布消息建的连接
+        self.publish_connect and self.publish_connect.release()
+        self.consume_connect and self.consume_connect.release()
+
+    def __enter__(self) -> AMQPRpcRequest:
+        """ 创建时回调 """
+        return self.as_inst()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """ 销毁时回调 """
-        self.stopped = True
-        # 使用ctypes模块根据consume线程标识向其发送终止信号
-        safe_kill_thread(self.consume_thread, SystemExit)
-        # 由于默认已经开启心跳机制所以此处服务端会自行回收连接
-        self.consume_connect = None
-        self.publish_connect = None
+        return self.release()
