@@ -31,4 +31,5 @@ class AMQPPubStandaloneProxy(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """ 销毁时回调 """
-        self.publish_connect and self.publish_connect.release()
+        # 由于默认已经开启心跳机制所以此处服务端会自行回收连接
+        self.publish_connect = None

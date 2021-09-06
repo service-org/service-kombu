@@ -151,6 +151,6 @@ class AMQPRpcStandaloneProxy(object):
         self.stopped = True
         # 使用ctypes模块根据consume线程标识向其发送终止信号
         safe_kill_thread(self.consume_thread, SystemExit)
-        # TODO: 调用consume和publish的release会阻塞无返回
         # 由于默认已经开启心跳机制所以此处服务端会自行回收连接
-        del self.consume_connect, self.publish_connect
+        self.consume_connect = None
+        self.publish_connect = None
