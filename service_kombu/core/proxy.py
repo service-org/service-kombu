@@ -157,7 +157,9 @@ class AMQPRpcProxy(object):
         cfg_connect_options.update(cur_connect_options)
         cfg_consume_options.update(cur_consume_options)
         cfg_publish_options.update(cur_publish_options)
-        config = {KOMBU_CONFIG_KEY: {'connect_options': cfg_connect_options,
-                                     'consume_options': cfg_consume_options,
-                                     'publish_options': cfg_publish_options}}
+        config = {
+            'connect_options': cfg_connect_options,
+            'consume_options': cfg_consume_options,
+            'publish_options': cfg_publish_options,
+        }
         return AMQPRpcStandaloneProxy(config=config)

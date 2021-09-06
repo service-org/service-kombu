@@ -18,7 +18,6 @@ from kombu.exceptions import ConnectionError
 from kombu.exceptions import OperationalError
 from kombu.exceptions import InconsistencyError
 from service_kombu.core.connect import Connection
-from service_kombu.constants import KOMBU_CONFIG_KEY
 from service_core.core.decorator import AsFriendlyFunc
 from service_core.core.as_helper import gen_curr_request_id
 from service_kombu.constants import DEFAULT_KOMBU_AMQP_REPLY_EXCHANGE_NAME
@@ -38,19 +37,17 @@ class AMQPRpcStandaloneProxy(object):
         @param config: 配置字典
         @param storage_buffer: 缓存大小
         """
-        self.config = config
         self.stopped = False
         self.queue_declared = False
         self.storage = {'_': []}
         self.correlation_id = gen_curr_request_id()
         self.storage_buffer = storage_buffer or 100
-        curr_config = config.get(KOMBU_CONFIG_KEY, {})
-        self.connect_options = curr_config.get('connect_options', {})
-        self.consume_options = curr_config.get('consume_options', {})
+        self.connect_options = config.get('connect_options', {})
+        self.consume_options = config.get('consume_options', {})
         self.consume_options.update({'no_ack': True})
         self.consume_options.update({'callbacks': [self.handle_request]})
         self.consume_options.update({'queues': [self.get_queue()]})
-        self.publish_options = curr_config.get('publish_options', {})
+        self.publish_options = config.get('publish_options', {})
         self.consume_connect = Connection(**self.connect_options)
         self.publish_connect = Connection(**self.connect_options)
         self.publish_options.setdefault('serializer', 'json')
@@ -143,7 +140,8 @@ class AMQPRpcStandaloneProxy(object):
         """ 创建时回调 """
         self.consume_thread.start()
         # 发送消息前必须保证回复队列已经成功声明否则收不到消息
-        while not self.queue_declared: time.sleep(0.01)
+        while not self.queue_declared:
+            time.sleep(0.01)
         return AMQPRpcRequest(self)
 
     def __exit__(self, exc_type, exc_val, exc_tb):

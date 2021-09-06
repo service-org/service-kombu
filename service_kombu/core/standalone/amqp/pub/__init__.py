@@ -8,7 +8,6 @@ import typing as t
 
 from service_kombu.core.publish import Publisher
 from service_kombu.core.connect import Connection
-from service_kombu.constants import KOMBU_CONFIG_KEY
 
 
 class AMQPPubStandaloneProxy(object):
@@ -19,10 +18,8 @@ class AMQPPubStandaloneProxy(object):
 
         @param config: 配置字典
         """
-        self.config = config
-        curr_config = config.get(KOMBU_CONFIG_KEY, {})
-        self.connect_options = curr_config.get('connect_options', {})
-        self.publish_options = curr_config.get('publish_options', {})
+        self.connect_options = config.get('connect_options', {})
+        self.publish_options = config.get('publish_options', {})
         self.publish_connect = Connection(**self.connect_options)
 
     def __enter__(self) -> Publisher:
