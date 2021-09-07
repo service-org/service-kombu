@@ -6,13 +6,14 @@ from __future__ import annotations
 
 import typing as t
 
-
 from service_kombu.core.publish import Publisher
 from service_kombu.core.connect import Connection
 from service_core.core.context import WorkerContext
 from service_kombu.constants import KOMBU_CONFIG_KEY
 from service_core.core.service.dependency import Dependency
+from service_kombu.core.convert import from_context_to_headers
 from service_kombu.constants import DEFAULT_KOMBU_AMQP_HEARTBEAT
+from service_kombu.constants import DEFAULT_KOMBU_AMQP_HEADERS_MAPPING
 
 
 class AMQPPubProducer(Dependency):
@@ -23,6 +24,7 @@ class AMQPPubProducer(Dependency):
     def __init__(
             self,
             alias: t.Text,
+            headers_mapping: t.Optional[t.Dict[t.Text, t.Any]] = None,
             connect_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             publish_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             **kwargs: t.Text
@@ -36,6 +38,7 @@ class AMQPPubProducer(Dependency):
         """
         self.alias = alias
         self.publish_connect = None
+        self.headers_mapping = headers_mapping or {}
         self.connect_options = connect_options or {}
         self.publish_options = publish_options or {}
         super(AMQPPubProducer, self).__init__(**kwargs)
@@ -45,6 +48,10 @@ class AMQPPubProducer(Dependency):
 
         @return: None
         """
+        headers_mapping = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.headers_mapping', {})
+        # 防止YAML中声明值为None
+        headers_mapping = DEFAULT_KOMBU_AMQP_HEADERS_MAPPING | (headers_mapping or {})
+        self.headers_mapping = (headers_mapping or {}) | self.headers_mapping
         connect_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.connect_options', {})
         # 防止YAML中声明值为None
         self.connect_options = (connect_options or {}) | self.connect_options
@@ -68,4 +75,5 @@ class AMQPPubProducer(Dependency):
         @param context: 上下文对象
         @return: t.Any
         """
-        return Publisher(self.publish_connect, context=context,  **self.publish_options)
+        headers = from_context_to_headers(context.data, mapping=self.headers_mapping)
+        return Publisher(self.publish_connect, headers=headers, **self.publish_options)

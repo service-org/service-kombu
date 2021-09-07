@@ -9,7 +9,6 @@ import typing as t
 from kombu import Exchange
 from logging import getLogger
 from service_kombu.core.publish import Publisher
-from service_core.core.context import WorkerContext
 from service_core.core.as_helper import gen_curr_request_id
 from service_core.core.service.dependency import Dependency
 
@@ -21,12 +20,12 @@ logger = getLogger(__name__)
 class AMQPRpcRequest(object):
     """ AMQP RPC请求处理器 """
 
-    def __init__(self, dependency: Dependency, context: t.Optional[WorkerContext] = None) -> None:
+    def __init__(self, dependency: Dependency, headers: t.Optional[t.Dict[t.Text, t.Any]] = None) -> None:
         """ 初始化实例
         @param dependency: 依赖对象
-        @param context: 上下文对象
+        @param headers: 头部信息
         """
-        self.context = context
+        self.headers = headers or {}
         self.dependency = dependency
 
     @staticmethod
@@ -45,7 +44,7 @@ class AMQPRpcRequest(object):
         correlation_id = f'{target}.{gen_curr_request_id()}'
         reply_queue = self.dependency.get_queue()
         target_exchange = self.get_target_exchange(target.split('.', 1)[0])
-        publisher = Publisher(self.dependency.publish_connect, context=self.context,
+        publisher = Publisher(self.dependency.publish_connect, headers=self.headers,
                               **self.dependency.publish_options)
         publisher.publish(body, routing_key=target,
                           reply_to=reply_queue.name,

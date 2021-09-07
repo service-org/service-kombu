@@ -35,18 +35,21 @@ class AMQPSubConsumer(Entrypoint):
     def __init__(
             self,
             alias: t.Text,
+            headers_mapping: t.Optional[t.Dict[t.Text, t.Any]] = None,
             connect_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             consume_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             **kwargs: t.Text) -> None:
         """ 初始化实例
 
         @param alias: 配置别名
+        @param headers_mapping: 头部映射
         @param connect_options: 连接配置
         @param consume_options: 消费配置
         @param kwargs: 其它配置
         """
         self.alias = alias
         self.consume_connect = None
+        self.headers_mapping = headers_mapping or {}
         self.connect_options = connect_options or {}
         self.consume_options = consume_options or {}
         super(AMQPSubConsumer, self).__init__(**kwargs)
@@ -56,6 +59,10 @@ class AMQPSubConsumer(Entrypoint):
 
         @return: None
         """
+        headers_mapping = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.headers_mapping', {})
+        # 防止YAML中声明值为None
+        headers_mapping = DEFAULT_KOMBU_AMQP_HEADERS_MAPPING | (headers_mapping or {})
+        self.headers_mapping = (headers_mapping or {}) | self.headers_mapping
         connect_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.connect_options', {})
         # 防止YAML中声明值为None
         self.connect_options = (connect_options or {}) | self.connect_options
@@ -106,7 +113,7 @@ class AMQPSubConsumer(Entrypoint):
         event = Event()
         tid = f'{self}.self_handle_request'
         args, kwargs = (body, message), {}
-        context = from_headers_to_context(message.headers, DEFAULT_KOMBU_AMQP_HEADERS_MAPPING)
+        context = from_headers_to_context(message.headers, self.headers_mapping)
         gt = self.container.spawn_worker_thread(self, args=args, kwargs=kwargs, context=context, tid=tid)
         gt.link(self._link_results, event)
         # 注意: 协程异常会导致收不到event最终内存溢出!

@@ -15,7 +15,9 @@ from service_core.core.context import WorkerContext
 from service_kombu.constants import KOMBU_CONFIG_KEY
 from service_core.core.as_helper import gen_curr_request_id
 from service_core.core.service.dependency import Dependency
+from service_kombu.core.convert import from_context_to_headers
 from service_kombu.constants import DEFAULT_KOMBU_AMQP_HEARTBEAT
+from service_kombu.constants import DEFAULT_KOMBU_AMQP_HEADERS_MAPPING
 from service_kombu.constants import DEFAULT_KOMBU_AMQP_REPLY_EXCHANGE_NAME
 
 from .requests import AMQPRpcRequest
@@ -35,6 +37,7 @@ class AMQPRpcProxy(Dependency):
             self,
             alias: t.Text,
             storage_buffer: t.Optional[int] = None,
+            headers_mapping: t.Optional[t.Dict[t.Text, t.Any]] = None,
             connect_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             consume_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             publish_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
@@ -56,6 +59,7 @@ class AMQPRpcProxy(Dependency):
         self.storage = {'_': []}
         self.storage_buffer = storage_buffer or 100
         self.correlation_id = gen_curr_request_id()
+        self.headers_mapping = headers_mapping or {}
         self.connect_options = connect_options or {}
         self.consume_options = consume_options or {}
         self.publish_options = publish_options or {}
@@ -84,6 +88,10 @@ class AMQPRpcProxy(Dependency):
 
         @return: None
         """
+        headers_mapping = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.headers_mapping', {})
+        # 防止YAML中声明值为None
+        headers_mapping = DEFAULT_KOMBU_AMQP_HEADERS_MAPPING | (headers_mapping or {})
+        self.headers_mapping = (headers_mapping or {}) | self.headers_mapping
         connect_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.connect_options', {})
         # 防止YAML中声明值为None
         self.connect_options = (connect_options or {}) | self.connect_options
@@ -132,4 +140,5 @@ class AMQPRpcProxy(Dependency):
         @param context: 上下文对象
         @return: t.Any
         """
-        return AMQPRpcRequest(self, context=context)
+        headers = from_context_to_headers(context.data, mapping=self.headers_mapping)
+        return AMQPRpcRequest(self, headers=headers)

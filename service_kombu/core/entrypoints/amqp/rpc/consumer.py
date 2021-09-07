@@ -21,6 +21,7 @@ from service_kombu.constants import KOMBU_CONFIG_KEY
 from service_core.core.service.entrypoint import Entrypoint
 from service_core.exchelper import gen_exception_description
 from service_kombu.core.convert import from_headers_to_context
+from service_kombu.core.convert import from_context_to_headers
 from service_kombu.constants import DEFAULT_KOMBU_AMQP_HEARTBEAT
 from service_kombu.constants import DEFAULT_KOMBU_AMQP_HEADERS_MAPPING
 
@@ -39,6 +40,7 @@ class AMQPRpcConsumer(Entrypoint):
     def __init__(
             self,
             alias: t.Text,
+            headers_mapping: t.Optional[t.Dict[t.Text, t.Any]] = None,
             connect_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             consume_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             publish_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
@@ -47,6 +49,7 @@ class AMQPRpcConsumer(Entrypoint):
         """ 初始化实例
 
         @param alias: 配置别名
+        @param headers_mapping: 头部映射
         @param connect_options: 连接配置
         @param consume_options: 消费配置
         @param publish_options: 发布配置
@@ -55,6 +58,7 @@ class AMQPRpcConsumer(Entrypoint):
         self.alias = alias
         self.consume_connect = None
         self.publish_connect = None
+        self.headers_mapping = headers_mapping or {}
         self.connect_options = connect_options or {}
         self.consume_options = consume_options or {}
         self.publish_options = publish_options or {}
@@ -88,6 +92,10 @@ class AMQPRpcConsumer(Entrypoint):
 
         @return: None
         """
+        headers_mapping = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.headers_mapping', {})
+        # 防止YAML中声明值为None
+        headers_mapping = DEFAULT_KOMBU_AMQP_HEADERS_MAPPING | (headers_mapping or {})
+        self.headers_mapping = (headers_mapping or {}) | self.headers_mapping
         connect_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.connect_options', {})
         # 防止YAML中声明值为None
         self.connect_options = (connect_options or {}) | self.connect_options
@@ -169,7 +177,7 @@ class AMQPRpcConsumer(Entrypoint):
         event = Event()
         tid = f'{self}.self_handle_request'
         args, kwargs = (body, message), {}
-        context = from_headers_to_context(message.headers, DEFAULT_KOMBU_AMQP_HEADERS_MAPPING)
+        context = from_headers_to_context(message.headers, self.headers_mapping)
         gt = self.container.spawn_worker_thread(self, args=args, kwargs=kwargs, context=context, tid=tid)
         gt.link(self._link_results, event)
         # 注意: 协程异常会导致收不到event最终内存溢出!
@@ -198,7 +206,8 @@ class AMQPRpcConsumer(Entrypoint):
         reply_to = message.properties['reply_to']
         correlation_id = message.properties['correlation_id']
         target_exchange = self.get_target_exchange(reply_to.split('.', 1)[0])
-        Publisher(self.publish_connect, context=context, **self.publish_options).publish(
+        headers = from_context_to_headers(context.data, mapping=self.headers_mapping)
+        Publisher(self.publish_connect, headers=headers, **self.publish_options).publish(
             body, exchange=target_exchange,
             correlation_id=correlation_id,
             routing_key=reply_to, **kwargs
