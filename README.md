@@ -75,7 +75,7 @@ class Service(BaseService):
 
         @param body: 消息内容
         @param message: 消息对象
-        @return: None
+        @return: t.Dict[t.Text, t.Any]
         """
         logger.debug(f'yeah~ yeah~ yeah~ i got {body} with {message}')
         return {'response_from_test_amqp_rpc': body}
