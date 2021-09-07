@@ -32,17 +32,24 @@ logger = getLogger(__name__)
 class AMQPRpcStandaloneProxy(object):
     """ AMQP RPC请求者代理 """
 
-    def __init__(self, config: t.Dict[t.Text, t.Any], storage_buffer: t.Optional[int] = None) -> None:
+    def __init__(
+            self,
+            config: t.Dict[t.Text, t.Any],
+            storage_buffer: t.Optional[int] = None,
+            drain_events_timeout: t.Optional[t.Union[int, float]] = 0.01
+    ) -> None:
         """ 初始化实例
 
         @param config: 配置字典
         @param storage_buffer: 缓存大小
+        @param drain_events_timeout: 消息流出超时时间
         """
         self.stopped = False
         self.queue_declared = False
         self.storage = {'_': []}
         self.correlation_id = gen_curr_request_id()
         self.storage_buffer = storage_buffer or 100
+        self.drain_events_timeout = drain_events_timeout
         self.connect_options = config.get('connect_options', {})
         self.consume_options = config.get('consume_options', {})
         self.consume_options.update({'no_ack': True})
@@ -121,9 +128,9 @@ class AMQPRpcStandaloneProxy(object):
                 consumer = Consumer(self.consume_connect, **self.consume_options)
                 consumer.consume()
                 logger.debug(f'{self} start consuming with {self.consume_options}')
-                # ctypes强制杀掉线程会导致consume_connect连接无法释放
+                # 如果想优雅结束请设置timeout但与其它框架集成时可设为None
                 while not self.stopped:
-                    func = partial(self.consume_connect.drain_events, timeout=0.01)
+                    func = partial(self.consume_connect.drain_events, timeout=self.drain_events_timeout)
                     AsFriendlyFunc(func=func, all_exception=(socket.timeout,))()
                 # 优雅处理如ctrl + c, sys.exit, kill thread时的异常
             except (KeyboardInterrupt, SystemExit):

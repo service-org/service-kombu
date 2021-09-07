@@ -148,11 +148,30 @@ from service_kombu.core.standalone.amqp.rpc import AMQPRpcStandaloneProxy
 config = {'connect_options': {'hostname': 'pyamqp://admin:nimda@127.0.0.1:5672//'}}
 
 # 其它框架集成PUB消息发布示例
+# 方式一:
+pub_proxy = AMQPPubStandaloneProxy(config=config)
+pub = pub_proxy.as_inst()
+target = 'demo.test_amqp_rpc'
+pub.publish({}, exchange=Exchange(target.split('.', 1)[0]), routing_key=target)
+pub_proxy.release()
+
+# 方式一:
 with AMQPPubStandaloneProxy(config=config) as pub:
     target = 'demo.test_amqp_rpc'
     pub.publish({}, exchange=Exchange(target.split('.', 1)[0]), routing_key=target)
 
 # 其它框架集成RPC请求调用示例
+# 优化点: 可让线程与框架进程共生死,不主动release, 并将drain_events_timeout设置为None
+# 方式一:
+start_time = time.time()
+rpc_proxy = AMQPRpcStandaloneProxy(config=config, drain_events_timeout=0.01)
+rpc = rpc_proxy.as_inst()
+target = 'demo.test_amqp_rpc'
+body, message = rpc.send_request(target, {}, timeout=1).result
+print(f'got response from {target}: body={body} message: {message} in {time.time() - start_time}')
+rpc_proxy.release()
+
+# 方式二:
 start_time = time.time()
 with AMQPRpcStandaloneProxy(config=config) as rpc:
     target = 'demo.test_amqp_rpc'
@@ -180,8 +199,7 @@ with AMQPRpcStandaloneProxy(config=config) as rpc:
 2021-09-05 21:06:51,587 - 83335 - DEBUG - load subctx service_core.cli.subctxs.config:Config succ
 2021-09-05 21:06:51,587 - 83335 - DEBUG - load subctx service_kombu.cli.subctx.amqp:AMQP succ
 CPython - 3.9.6 (v3.9.6:db3ff76da1, Jun 28 2021, 11:49:53) [Clang 6.0 (clang-600.0.57)]
->>> with s.amqp.rpc.proxy(alias='test') as rpc:
-...     rpc.send_request(f'demo.test_amqp_rpc', {}, timeout=1).result
+>>> s.amqp.rpc.proxy(alias='test').send_request(f'demo.test_amqp_rpc', {}, timeout=1).result  
 ({'response_from_test_amqp_rpc': {}}, <Message object at 0x7ff0b47dc670 with details {'state': 'RECEIVED', 'content_type': 'application/json', 'delivery_tag': 1, 'body_length': 119, 'properties': {'correlation_id': 'demo.test_amqp_rpc.abdcae97ea1e46f28930aea45b4d20ea'}, 'delivery_info': {'exchange': 'service', 'routing_key': 'service.amqp.rpc.standalone.proxy.0d71a700f7f243479a23721401cabfb4'}}>)
 ```
 

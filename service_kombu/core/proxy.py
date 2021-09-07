@@ -13,6 +13,8 @@ from service_core.core.configure import Configure
 from service_kombu.constants import KOMBU_CONFIG_KEY
 from service_kombu.core.standalone.amqp.rpc import AMQPRpcStandaloneProxy
 
+from .standalone.amqp.rpc.requests import AMQPRpcRequest
+
 
 class AMQPSubProxy(object):
     """ 消息订阅代理类 """
@@ -90,7 +92,7 @@ class AMQPPubProxy(object):
         @param alias: 配置别名
         @param connect_options: 连接配置
         @param publish_options: 发布配置
-        @return: Consumer
+        @return: Producer
         """
         cur_connect_options = self.connect_options
         cur_publish_options = self.consume_options
@@ -134,14 +136,14 @@ class AMQPRpcProxy(object):
             connect_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             consume_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             publish_options: t.Optional[t.Dict[t.Text, t.Any]] = None
-    ) -> AMQPRpcStandaloneProxy:
+    ) -> AMQPRpcRequest:
         """ 代理可调用
 
         @param alias: 配置别名
         @param connect_options: 连接配置
         @param consume_options: 消费配置
         @param publish_options: 发布配置
-        @return:
+        @return: AMQPRpcRequest
         """
         cur_connect_options = self.connect_options
         cur_consume_options = self.consume_options
@@ -162,4 +164,5 @@ class AMQPRpcProxy(object):
             'consume_options': cfg_consume_options,
             'publish_options': cfg_publish_options,
         }
-        return AMQPRpcStandaloneProxy(config=config)
+        # 消费者线程将与启动shell共生死
+        return AMQPRpcStandaloneProxy(config=config, drain_events_timeout=None).as_inst()
