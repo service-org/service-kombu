@@ -83,7 +83,7 @@ class Service(BaseService):
     @amqp.sub(alias='test', consume_options={
         'no_ack': True,
         'queues': [Queue('test', exchange=Exchange('test', 'direct', durable=True), routing_key='test')]}
-    )
+              )
     def test_amqp_sub(self, body: t.Any, message: Message) -> None:
         """ 测试AMQP SUB订阅
 
@@ -149,11 +149,11 @@ config = {'connect_options': {'hostname': 'pyamqp://admin:nimda@127.0.0.1:5672//
 
 # 其它框架集成PUB消息发布示例
 # 方式一:
-pub_proxy = AMQPPubStandaloneProxy(config=config)
-pub = pub_proxy.as_inst()
+ins = AMQPPubStandaloneProxy(config=config)
+pub = ins.as_inst()
 target = 'demo.test_amqp_rpc'
 pub.publish({}, exchange=Exchange(target.split('.', 1)[0]), routing_key=target)
-pub_proxy.release()
+ins.release()
 
 # 方式一:
 with AMQPPubStandaloneProxy(config=config) as pub:
@@ -164,12 +164,12 @@ with AMQPPubStandaloneProxy(config=config) as pub:
 # 优化点: 可让线程与框架进程共生死,不主动release, 并将drain_events_timeout设置为None
 # 方式一:
 start_time = time.time()
-rpc_proxy = AMQPRpcStandaloneProxy(config=config, drain_events_timeout=0.01)
-rpc = rpc_proxy.as_inst()
+ins = AMQPRpcStandaloneProxy(config=config, drain_events_timeout=0.01)
+rpc = ins.as_inst()
 target = 'demo.test_amqp_rpc'
 body, message = rpc.send_request(target, {}, timeout=1).result
 print(f'got response from {target}: body={body} message: {message} in {time.time() - start_time}')
-rpc_proxy.release()
+ins.release()
 
 # 方式二:
 start_time = time.time()
