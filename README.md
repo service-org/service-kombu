@@ -132,7 +132,7 @@ service = Service()
 
 # 框架集成
 
-> 可将drain_events_timeout设置为None,并让衍生线程与框架共生,效率可提升1倍
+> 与其它框架集成时可将drain_events_timeout设置为None,并让衍生常驻线程与框架共生,效率可提升1倍
 
 ```python
 #! -*- coding: utf-8 -*-
