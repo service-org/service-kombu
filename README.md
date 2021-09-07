@@ -132,6 +132,8 @@ service = Service()
 
 # 框架集成
 
+> 可将drain_events_timeout设置为None,并让衍生线程与框架共生,效率可提升1倍
+
 ```python
 #! -*- coding: utf-8 -*-
 #
@@ -148,21 +150,20 @@ from service_kombu.core.standalone.amqp.rpc import AMQPRpcStandaloneProxy
 config = {'connect_options': {'hostname': 'pyamqp://admin:nimda@127.0.0.1:5672//'}}
 
 # 其它框架集成PUB消息发布示例
-# 方式一:
+# 方式一: 手动释放连接
 ins = AMQPPubStandaloneProxy(config=config)
 pub = ins.as_inst()
 target = 'demo.test_amqp_rpc'
 pub.publish({}, exchange=Exchange(target.split('.', 1)[0]), routing_key=target)
 ins.release()
 
-# 方式一:
+# 方式二: 自动释放连接
 with AMQPPubStandaloneProxy(config=config) as pub:
     target = 'demo.test_amqp_rpc'
     pub.publish({}, exchange=Exchange(target.split('.', 1)[0]), routing_key=target)
 
 # 其它框架集成RPC请求调用示例
-# 优化点: 可让线程与框架进程共生死,不主动release, 并将drain_events_timeout设置为None
-# 方式一:
+# 方式一: 手动释放连接
 start_time = time.time()
 ins = AMQPRpcStandaloneProxy(config=config, drain_events_timeout=0.01)
 rpc = ins.as_inst()
@@ -171,7 +172,7 @@ body, message = rpc.send_request(target, {}, timeout=1).result
 print(f'got response from {target}: body={body} message: {message} in {time.time() - start_time}')
 ins.release()
 
-# 方式二:
+# 方式二: 自动释放连接
 start_time = time.time()
 with AMQPRpcStandaloneProxy(config=config) as rpc:
     target = 'demo.test_amqp_rpc'
