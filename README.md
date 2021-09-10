@@ -53,6 +53,8 @@ from service_croniter.core.entrypoints import croniter
 from service_core.core.service import Service as BaseService
 from service_kombu.core.dependencies.rpc import AMQPRpcProxy
 from service_kombu.core.dependencies.pub import AMQPPubProducer
+from service_kombu.core.publish import Publisher as AMQPPublisher
+from service_kombu.core.dependencies.rpc.requests import AMQPRpcRequest
 
 logger = getLogger(__name__)
 
@@ -66,8 +68,8 @@ class Service(BaseService):
     desc = 'demo'
 
     # 作为依赖项
-    rpc = AMQPRpcProxy(alias='test')
-    pub = AMQPPubProducer(alias='test')
+    rpc: AMQPRpcRequest = AMQPRpcProxy(alias='test')
+    pub: AMQPPublisher = AMQPPubProducer(alias='test')
 
     @amqp.rpc(alias='test')
     def test_amqp_rpc(self, body: t.Any, message: Message) -> t.Dict[t.Text, t.Any]:
