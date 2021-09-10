@@ -67,7 +67,7 @@ class Service(BaseService):
     # 微服务简介
     desc = 'demo'
 
-    # 作为依赖项
+    # 发布和订阅
     rpc: AMQPRpcRequest = AMQPRpcProxy(alias='test')
     pub: AMQPPublisher = AMQPPubProducer(alias='test')
 
