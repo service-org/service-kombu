@@ -15,7 +15,7 @@ from eventlet.greenthread import GreenThread
 from kombu.exceptions import ConnectionError
 from kombu.exceptions import OperationalError
 from kombu.exceptions import InconsistencyError
-from service_kombu.core.connect import Connection
+from service_kombu.core.client import AMQPClient
 from service_core.core.spawning import SpawningProxy
 from service_core.core.decorator import AsFriendlyFunc
 from service_core.core.service.entrypoint import Entrypoint
@@ -94,7 +94,7 @@ class AMQPRpcProducer(Entrypoint, ShareExtension, StoreExtension):
             try:
                 if consume_connect_loss is True:
                     logger.debug(f'{self} consume_connect loss, start reconnecting')
-                    extension.consume_connect = Connection(**extension.connect_options)
+                    extension.consume_connect = AMQPClient(**extension.connect_options)
                     extension.consume_connect.connect()
                     logger.debug(f'{self} consume_connect loss, reconnect success')
                     consume_connect_loss = False

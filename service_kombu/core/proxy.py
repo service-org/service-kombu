@@ -8,7 +8,8 @@ import typing as t
 
 from kombu import Consumer
 from kombu import Producer
-from kombu import Connection
+from service_kombu.core.publish import Publisher
+from service_kombu.core.client import AMQPClient
 from service_core.core.configure import Configure
 from service_kombu.constants import KOMBU_CONFIG_KEY
 from service_kombu.core.standalone.amqp.rpc import AMQPRpcStandaloneProxy
@@ -58,7 +59,7 @@ class AMQPSubProxy(object):
         # 调用时传递的参数配置优先级最高
         cfg_connect_options.update(cur_connect_options)
         cfg_consume_options.update(cur_consume_options)
-        connection = Connection(**cfg_connect_options)
+        connection = AMQPClient(**cfg_connect_options)
         return Consumer(connection, **cfg_consume_options)
 
 
@@ -104,8 +105,8 @@ class AMQPPubProxy(object):
         # 调用时传递的参数配置优先级最高
         cfg_connect_options.update(cur_connect_options)
         cfg_publish_options.update(cur_publish_options)
-        connection = Connection(**cfg_connect_options)
-        return Producer(connection, **cfg_publish_options)
+        connection = AMQPClient(**cfg_connect_options)
+        return Publisher(connection, **cfg_publish_options)
 
 
 class AMQPRpcProxy(object):

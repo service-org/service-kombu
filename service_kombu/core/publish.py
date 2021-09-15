@@ -6,13 +6,13 @@ from __future__ import annotations
 
 import typing as t
 
+from kombu import Producer
 from logging import getLogger
-from kombu import Producer as BaseProducer
 
 logger = getLogger(__name__)
 
 
-class Publisher(BaseProducer):
+class Publisher(Producer):
     """ AMQP通用发送类 """
 
     def __init__(self, *args: t.Any, headers: t.Optional[t.Dict[t.Text, t.Any]] = None, **kwargs: t.Text) -> None:

@@ -4,16 +4,16 @@
 
 from __future__ import annotations
 
-from kombu import Connection as BaseConnection
+from kombu import Connection
 
 
-class Connection(BaseConnection):
+class AMQPClient(Connection):
     """ AMQP通用连接类 """
 
-    def connect(self) -> Connection:
+    def connect(self) -> AMQPClient:
         """ Establish connection to server immediately.
 
-        @return: Connection
+        @return: AMQPClient
         """
         # 关闭默认重试,由消费者调度器自己实现
         return self._ensure_connection(

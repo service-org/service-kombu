@@ -7,7 +7,7 @@ from __future__ import annotations
 import typing as t
 
 from service_kombu.core.publish import Publisher
-from service_kombu.core.connect import Connection
+from service_kombu.core.client import AMQPClient
 from service_core.core.context import WorkerContext
 from service_kombu.constants import KOMBU_CONFIG_KEY
 from service_core.core.service.dependency import Dependency
@@ -56,7 +56,7 @@ class AMQPPubProducer(Dependency):
         # 防止YAML中声明值为None
         self.connect_options = (connect_options or {}) | self.connect_options
         self.connect_options.setdefault('heartbeat ', DEFAULT_KOMBU_AMQP_HEARTBEAT)
-        self.publish_connect = Connection(**self.connect_options)
+        self.publish_connect = AMQPClient(**self.connect_options)
         publish_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.publish_options', {})
         # 防止YAML中声明值为None
         self.publish_options = (publish_options or {}) | self.publish_options

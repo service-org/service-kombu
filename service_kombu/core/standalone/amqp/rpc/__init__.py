@@ -19,7 +19,7 @@ from kombu.exceptions import ChannelError
 from kombu.exceptions import ConnectionError
 from kombu.exceptions import OperationalError
 from kombu.exceptions import InconsistencyError
-from service_kombu.core.connect import Connection
+from service_kombu.core.client import AMQPClient
 from service_core.core.decorator import AsFriendlyFunc
 from service_core.core.as_helper import gen_curr_request_id
 from service_kombu.constants import DEFAULT_KOMBU_AMQP_REPLY_EXCHANGE_NAME
@@ -56,10 +56,10 @@ class AMQPRpcStandaloneProxy(object):
         self.consume_options.update({'callbacks': [self.handle_request]})
         self.consume_options.update({'queues': [self.get_queue()]})
         self.publish_options = config.get('publish_options', {})
-        self.consume_connect = Connection(**self.connect_options)
-        self.publish_connect = Connection(**self.connect_options)
+        self.consume_connect = AMQPClient(**self.connect_options)
+        self.publish_connect = AMQPClient(**self.connect_options)
         self.publish_options.setdefault('serializer', 'json')
-        self.publish_connect = Connection(**self.connect_options)
+        self.publish_connect = AMQPClient(**self.connect_options)
         # 应该在内部逻辑层面防止此线程异常退出但同时需要设置daemon=True和主进程一起生死与共
         name = f'amqp.rpc.standalone.proxy.{self.correlation_id}'
         self.consume_thread = Thread(target=self.consume, name=name, daemon=True)
@@ -90,10 +90,10 @@ class AMQPRpcStandaloneProxy(object):
         exchange_name = DEFAULT_KOMBU_AMQP_REPLY_EXCHANGE_NAME
         exchange, routing_key = self.get_exchange(), self.get_routing_key()
         queue_name = f'{exchange_name}.amqp.rpc.standalone.proxy.{self.correlation_id}'
-        return Queue(
-            name=queue_name, exchange=exchange, routing_key=routing_key,
-            durable=False, auto_delete=True, on_declared=on_queue_declared
-        )
+        queue_options = {'name': queue_name, 'durable': False, 'auto_delete': True,
+                         'exchange': exchange, 'routing_key': routing_key
+                         }
+        return Queue(on_declared=on_queue_declared, **queue_options)
 
     @staticmethod
     def get_target_exchange(name: t.Text) -> Exchange:
@@ -121,7 +121,7 @@ class AMQPRpcStandaloneProxy(object):
             try:
                 if consume_connect_loss is True:
                     logger.debug(f'{self} consume_connect loss, start reconnecting')
-                    self.consume_connect = Connection(**self.connect_options)
+                    self.consume_connect = AMQPClient(**self.connect_options)
                     self.consume_connect.connect()
                     logger.debug(f'{self} consume_connect loss, reconnect success')
                     consume_connect_loss = False
@@ -165,6 +165,6 @@ class AMQPRpcStandaloneProxy(object):
         """ 创建时回调 """
         return self.as_inst()
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, *args: t.Any, **kwargs: t.Any) -> None:
         """ 销毁时回调 """
         return self.release()
