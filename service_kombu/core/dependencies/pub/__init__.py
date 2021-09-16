@@ -27,7 +27,7 @@ class AMQPPubProducer(Dependency):
             headers_mapping: t.Optional[t.Dict[t.Text, t.Any]] = None,
             connect_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             publish_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
-            **kwargs: t.Text
+            **kwargs: t.Any
     ) -> None:
         """ 初始化实例
 

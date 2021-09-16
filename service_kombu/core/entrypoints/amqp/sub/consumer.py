@@ -38,7 +38,7 @@ class AMQPSubConsumer(Entrypoint):
             headers_mapping: t.Optional[t.Dict[t.Text, t.Any]] = None,
             connect_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             consume_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
-            **kwargs: t.Text) -> None:
+            **kwargs: t.Any) -> None:
         """ 初始化实例
 
         @param alias: 配置别名

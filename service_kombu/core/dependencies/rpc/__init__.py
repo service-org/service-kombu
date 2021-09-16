@@ -41,7 +41,7 @@ class AMQPRpcProxy(Dependency):
             connect_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             consume_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
             publish_options: t.Optional[t.Dict[t.Text, t.Any]] = None,
-            **kwargs: t.Text
+            **kwargs: t.Any
     ) -> None:
         """ 初始化实例
 

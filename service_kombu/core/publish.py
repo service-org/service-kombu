@@ -15,7 +15,7 @@ logger = getLogger(__name__)
 class Publisher(Producer):
     """ AMQP通用发送类 """
 
-    def __init__(self, *args: t.Any, headers: t.Optional[t.Dict[t.Text, t.Any]] = None, **kwargs: t.Text) -> None:
+    def __init__(self, *args: t.Any, headers: t.Optional[t.Dict[t.Text, t.Any]] = None, **kwargs: t.Any) -> None:
         """ 初始化实例
 
         @param args: 位置参数
