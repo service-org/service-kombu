@@ -102,6 +102,7 @@ class AMQPRpcProxy(Dependency):
         # 防止YAML中声明值为None
         self.consume_options = (consume_options or {}) | self.consume_options
         self.consume_options.update({'no_ack': True})
+        self.consume_options.update({'auto_declare': True})
         self.consume_options.update({'callbacks': [self.handle_request]})
         self.consume_options.update({'queues': [self.get_queue()]})
         publish_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.publish_options', {})

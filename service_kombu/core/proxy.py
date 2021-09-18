@@ -59,6 +59,7 @@ class AMQPSubProxy(object):
         # 调用时传递的参数配置优先级最高
         cfg_connect_options.update(cur_connect_options)
         cfg_consume_options.update(cur_consume_options)
+        cfg_consume_options.update({'auto_declare': True})
         connection = AMQPClient(**cfg_connect_options)
         return Consumer(connection, **cfg_consume_options)
 
@@ -159,6 +160,7 @@ class AMQPRpcProxy(object):
         # 调用时传递的参数配置优先级最高
         cfg_connect_options.update(cur_connect_options)
         cfg_consume_options.update(cur_consume_options)
+        cfg_consume_options.update({'auto_declare': True})
         cfg_publish_options.update(cur_publish_options)
         config = {
             'connect_options': cfg_connect_options,
