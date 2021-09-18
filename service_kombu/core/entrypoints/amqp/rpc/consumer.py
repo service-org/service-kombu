@@ -107,7 +107,6 @@ class AMQPRpcConsumer(Entrypoint):
         self.consume_options = (consume_options or {}) | self.consume_options
         # RPC请求成功失败都自动确认
         self.consume_options.update({'no_ack': True})
-        self.consume_options.update({'auto_declare': True})
         self.consume_options.update({'callbacks': [self.handle_request]})
         self.consume_options.update({'queues': [self.get_queue()]})
         publish_options = self.container.config.get(f'{KOMBU_CONFIG_KEY}.{self.alias}.publish_options', {})

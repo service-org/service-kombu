@@ -53,7 +53,6 @@ class AMQPRpcStandaloneProxy(object):
         self.connect_options = config.get('connect_options', {})
         self.consume_options = config.get('consume_options', {})
         self.consume_options.update({'no_ack': True})
-        self.consume_options.update({'auto_declare': True})
         self.consume_options.update({'callbacks': [self.handle_request]})
         self.consume_options.update({'queues': [self.get_queue()]})
         self.publish_options = config.get('publish_options', {})
