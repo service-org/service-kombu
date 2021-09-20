@@ -63,6 +63,7 @@ class AMQPRpcProxy(Dependency):
         self.connect_options = connect_options or {}
         self.consume_options = consume_options or {}
         self.publish_options = publish_options or {}
+        kwargs.setdefault('once_inject', False)
         super(AMQPRpcProxy, self).__init__(**kwargs)
 
     @staticmethod

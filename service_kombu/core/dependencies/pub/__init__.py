@@ -41,6 +41,7 @@ class AMQPPubProducer(Dependency):
         self.headers_mapping = headers_mapping or {}
         self.connect_options = connect_options or {}
         self.publish_options = publish_options or {}
+        kwargs.setdefault('once_inject', False)
         super(AMQPPubProducer, self).__init__(**kwargs)
 
     def setup(self) -> None:
