@@ -159,7 +159,7 @@ class AMQPRpcConsumer(Entrypoint):
         # fix: 此协程异常会导致收不到event最终内存溢出!
         try:
             context, results, excinfo = gt.wait()
-        except Exception:
+        except BaseException:
             results, excinfo = None, sys.exc_info()
             context = eventlet.getcurrent().context
         event.send((context, results, excinfo))
