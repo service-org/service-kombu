@@ -4,12 +4,14 @@
 
 from __future__ import annotations
 
+import eventlet
 import typing as t
 
 from service_kombu.core.publish import Publisher
 from service_kombu.core.client import AMQPClient
 from service_core.core.context import WorkerContext
 from service_kombu.constants import KOMBU_CONFIG_KEY
+from service_core.core.storage import green_thread_local
 from service_core.core.service.dependency import Dependency
 from service_kombu.core.convert import from_context_to_headers
 from service_kombu.constants import DEFAULT_KOMBU_AMQP_HEARTBEAT
@@ -41,7 +43,6 @@ class AMQPPubProducer(Dependency):
         self.headers_mapping = headers_mapping or {}
         self.connect_options = connect_options or {}
         self.publish_options = publish_options or {}
-        kwargs.setdefault('once_inject', False)
         super(AMQPPubProducer, self).__init__(**kwargs)
 
     def setup(self) -> None:
@@ -70,11 +71,11 @@ class AMQPPubProducer(Dependency):
         """
         self.publish_connect and self.publish_connect.release()
 
-    def get_instance(self, context: WorkerContext) -> t.Any:
-        """ 获取注入对象
+    def get_client(self) -> Publisher:
+        """ 获取一个独立的会话
 
-        @param context: 上下文对象
-        @return: t.Any
+        @return: Publisher
         """
+        context = getattr(green_thread_local, 'context')
         headers = from_context_to_headers(context.data, mapping=self.headers_mapping)
         return Publisher(self.publish_connect, headers=headers, **self.publish_options)

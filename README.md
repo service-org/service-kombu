@@ -53,8 +53,6 @@ from service_croniter.core.entrypoints import croniter
 from service_core.core.service import Service as BaseService
 from service_kombu.core.dependencies.rpc import AMQPRpcProxy
 from service_kombu.core.dependencies.pub import AMQPPubProducer
-from service_kombu.core.publish import Publisher as AMQPPublisher
-from service_kombu.core.dependencies.rpc.requests import AMQPRpcRequest
 
 logger = getLogger(__name__)
 
@@ -67,9 +65,10 @@ class Service(BaseService):
     # 微服务简介
     desc = 'demo'
 
-    # 发布和订阅
-    rpc: AMQPRpcRequest = AMQPRpcProxy(alias='test')
-    pub: AMQPPublisher = AMQPPubProducer(alias='test')
+    # AMQP-RPC
+    rpc: AMQPRpcProxy = AMQPRpcProxy(alias='test')
+    # AMQP-PUB
+    pub: AMQPPubProducer = AMQPPubProducer(alias='test')
 
     @amqp.rpc(alias='test')
     def test_amqp_rpc(self, body: t.Any, message: Message) -> t.Dict[t.Text, t.Any]:
@@ -83,9 +82,8 @@ class Service(BaseService):
         return {'response_from_test_amqp_rpc': body}
 
     @amqp.sub(alias='test', consume_options={
-        'no_ack': True,
-        'queues': [Queue('test', exchange=Exchange('test', 'direct', durable=True), routing_key='test')]}
-              )
+        'no_ack': True, 'prefetch_count': 100,
+        'queues': [Queue('test', exchange=Exchange('test', 'direct', durable=True), routing_key='test')]})
     def test_amqp_sub(self, body: t.Any, message: Message) -> None:
         """ 测试AMQP SUB订阅
 
@@ -95,7 +93,7 @@ class Service(BaseService):
         """
         logger.debug(f'yeah~ yeah~ yeah~ i got {body} with {message}')
         send_data = {'request_from_test_amqp_sub': body}
-        reply = self.rpc.send_request(f'{self.name}.test_amqp_rpc', send_data).result
+        reply = self.rpc.get_client().send_request(f'{self.name}.test_amqp_rpc', send_data).result
         reply_body, reply_message = reply
         logger.debug(f'yeah~ yeah~ yeah~ i got reply {reply_body} with {reply_message}')
 
@@ -111,7 +109,7 @@ class Service(BaseService):
             'serializer': 'json',
             'exchange': Exchange('test', 'direct', durable=True)
         }
-        self.pub.publish(send_data, **publish_options)
+        self.pub.get_client().publish(send_data, **publish_options)
 ```
 
 > facade.py
@@ -151,28 +149,29 @@ from service_kombu.core.standalone.amqp.rpc import AMQPRpcStandaloneProxy
 
 config = {'connect_options': {'hostname': 'pyamqp://admin:nimda@127.0.0.1:5672//'}}
 
-# 其它框架集成PUB消息发布示例
 # 方式一: 手动释放连接
-ins = AMQPPubStandaloneProxy(config=config)
-pub = ins.as_inst()
-target = 'demo.test_amqp_rpc'
-pub.publish({}, exchange=Exchange(target.split('.', 1)[0]), routing_key=target)
-ins.release()
+pub_proxy = AMQPPubStandaloneProxy(config=config)
+pub = pub_proxy.as_inst()
+pub_exchange_name = 'demo'
+pub_routing_key = f'{pub_exchange_name}.test_amqp_rpc'
+pub.publish({}, exchange=Exchange(pub_exchange_name, type='direct'), routing_key=pub_routing_key)
+pub_proxy.release()
 
 # 方式二: 自动释放连接
 with AMQPPubStandaloneProxy(config=config) as pub:
-    target = 'demo.test_amqp_rpc'
-    pub.publish({}, exchange=Exchange(target.split('.', 1)[0]), routing_key=target)
+    pub_exchange_name = 'demo'
+    pub_routing_key = f'{pub_exchange_name}.test_amqp_rpc'
+    pub.publish({}, exchange=Exchange(pub_exchange_name, type='direct'), routing_key=pub_routing_key)
 
 # 其它框架集成RPC请求调用示例
 # 方式一: 手动释放连接
 start_time = time.time()
-ins = AMQPRpcStandaloneProxy(config=config, drain_events_timeout=0.01)
-rpc = ins.as_inst()
+rpc_proxy = AMQPRpcStandaloneProxy(config=config, drain_events_timeout=0.01)
+rpc = rpc_proxy.as_inst()
 target = 'demo.test_amqp_rpc'
 body, message = rpc.send_request(target, {}, timeout=1).result
 print(f'got response from {target}: body={body} message: {message} in {time.time() - start_time}')
-ins.release()
+rpc_proxy.release()
 
 # 方式二: 自动释放连接
 start_time = time.time()

@@ -11,8 +11,8 @@ from kombu import Exchange
 from logging import getLogger
 from kombu.message import Message
 from service_kombu.core.client import AMQPClient
-from service_core.core.context import WorkerContext
 from service_kombu.constants import KOMBU_CONFIG_KEY
+from service_core.core.storage import green_thread_local
 from service_core.core.as_helper import gen_curr_request_id
 from service_core.core.service.dependency import Dependency
 from service_kombu.core.convert import from_context_to_headers
@@ -135,11 +135,11 @@ class AMQPRpcProxy(Dependency):
         # 防止发送RPC请求但又不需要结果的情况导致内存溢出
         len(self.storage.get('_')) > self.storage_buffer and self._clean_storage()
 
-    def get_instance(self, context: WorkerContext) -> t.Any:
-        """ 获取注入对象
+    def get_client(self) -> AMQPRpcRequest:
+        """ 获取一个独立的会话
 
-        @param context: 上下文对象
-        @return: t.Any
+        @return: AMQPRpcRequest
         """
+        context = getattr(green_thread_local, 'context')
         headers = from_context_to_headers(context.data, mapping=self.headers_mapping)
         return AMQPRpcRequest(self, headers=headers)
