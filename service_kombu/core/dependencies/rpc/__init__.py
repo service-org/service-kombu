@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import eventlet
 import typing as t
 
 from kombu import Queue
@@ -12,7 +13,6 @@ from logging import getLogger
 from kombu.message import Message
 from service_kombu.core.client import AMQPClient
 from service_kombu.constants import KOMBU_CONFIG_KEY
-from service_core.core.storage import green_thread_local
 from service_core.core.as_helper import gen_curr_request_id
 from service_core.core.service.dependency import Dependency
 from service_kombu.core.convert import from_context_to_headers
@@ -139,6 +139,6 @@ class AMQPRpcProxy(Dependency):
 
         @return: AMQPRpcRequest
         """
-        context = getattr(green_thread_local, 'context')
+        context = eventlet.getcurrent().context
         headers = from_context_to_headers(context.data, mapping=self.headers_mapping)
         return AMQPRpcRequest(self, headers=headers)
