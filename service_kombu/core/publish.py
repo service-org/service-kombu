@@ -32,7 +32,7 @@ class Publisher(Producer):
         @param kwargs: 发布参数
         @return: None
         """
-        kwargs.get('headers', {}).update(self.headers)
+        kwargs.setdefault('headers', {}).update(self.headers)
         # 防止开启心跳后超时被服务端主动踢下线
         kwargs.setdefault('retry', True)
         logger.debug(f'publish message: {body} with {kwargs}')
